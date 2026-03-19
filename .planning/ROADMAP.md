@@ -30,7 +30,12 @@ Reva Scanner is built in eight phases that follow a strict dependency chain: inf
   2. Bot is reachable via Telegram webhook (not polling) on a live Railway URL.
   3. PostgreSQL schema is migrated: tables for users, scans, payments, and content_queue exist.
   4. User profile row (telegram_id, name, registration date) is created automatically on first /start.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Config, database layer, all four ORM models, UserService, test scaffold
+- [ ] 01-02-PLAN.md — Alembic async migration for all four tables, Railway release command
+- [ ] 01-03-PLAN.md — FastAPI webhook integration, /start handler, Dockerfile, webhook integration tests
 
 ### Phase 2: Mini-Scan Flow
 **Goal**: Users can complete a free 5-question diagnostic and receive a teaser report that names one specific business pain point, setting up the paid conversion.
@@ -115,7 +120,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/TBD | Not started | - |
+| 1. Foundation | 0/3 | Not started | - |
 | 2. Mini-Scan Flow | 0/TBD | Not started | - |
 | 3. Full Scan Questionnaire | 0/TBD | Not started | - |
 | 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
