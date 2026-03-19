@@ -47,7 +47,11 @@ Plans:
   3. User sees a "сканирую..." message immediately after submitting answers — the bot never appears frozen.
   4. User receives a teaser report naming one specific, uncomfortable business truth (not a generic tip).
   5. A full mini-scan costs less than $0.05 in Claude API (Haiku used; token usage logged per request).
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Core services: numerology calculator, Claude AI teaser service, scan persistence service
+- [ ] 02-02-PLAN.md — FSM mini-scan flow: /start keyboard, 5-question FSM, scanning feedback, report delivery, upsell
 
 ### Phase 3: Full Scan Questionnaire
 **Goal**: Users who have seen the teaser can launch the full 12-15 question scan with one button, provide a social/site URL, and have all inputs persisted for the AI engine.
@@ -121,7 +125,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/3 | Not started | - |
-| 2. Mini-Scan Flow | 0/TBD | Not started | - |
+| 2. Mini-Scan Flow | 0/2 | Not started | - |
 | 3. Full Scan Questionnaire | 0/TBD | Not started | - |
 | 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
 | 5. Payment Gate | 0/TBD | Not started | - |
