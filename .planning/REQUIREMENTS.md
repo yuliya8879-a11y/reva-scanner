@@ -71,11 +71,31 @@
 
 ## Traceability
 
-| Requirement | Phase |
-|-------------|-------|
-| BOT-01..08  | Phase 1-2 |
-| AI-01..05   | Phase 2 |
-| PAY-01..04  | Phase 3 |
-| DB-01..03   | Phase 1 |
-| ADM-01..02  | Phase 2 |
-| CNT-01..04  | Phase 5 |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| BOT-01 | Phase 1 — Foundation | Pending |
+| DB-01 | Phase 1 — Foundation | Pending |
+| DB-02 | Phase 1 — Foundation | Pending |
+| DB-03 | Phase 1 — Foundation | Pending |
+| BOT-02 | Phase 2 — Mini-Scan Flow | Pending |
+| BOT-04 | Phase 2 — Mini-Scan Flow | Pending |
+| BOT-05 | Phase 2 — Mini-Scan Flow | Pending |
+| BOT-07 | Phase 2 — Mini-Scan Flow | Pending |
+| AI-01 | Phase 2 — Mini-Scan Flow | Pending |
+| AI-04 | Phase 2 — Mini-Scan Flow | Pending |
+| AI-05 | Phase 2 — Mini-Scan Flow | Pending |
+| BOT-03 | Phase 3 — Full Scan Questionnaire | Pending |
+| BOT-06 | Phase 3 — Full Scan Questionnaire | Pending |
+| BOT-08 | Phase 4 — AI Engine and Report Delivery | Pending |
+| AI-02 | Phase 4 — AI Engine and Report Delivery | Pending |
+| AI-03 | Phase 4 — AI Engine and Report Delivery | Pending |
+| PAY-01 | Phase 5 — Payment Gate | Pending |
+| PAY-02 | Phase 5 — Payment Gate | Pending |
+| PAY-03 | Phase 5 — Payment Gate | Pending |
+| PAY-04 | Phase 5 — Payment Gate | Pending |
+| ADM-01 | Phase 6 — Admin Panel | Pending |
+| ADM-02 | Phase 6 — Admin Panel | Pending |
+| CNT-01 | Phase 7 — Content Generation | Pending |
+| CNT-02 | Phase 7 — Content Generation | Pending |
+| CNT-03 | Phase 7 — Content Generation | Pending |
+| CNT-04 | Phase 8 — Content Scheduler | Pending |
