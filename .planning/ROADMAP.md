@@ -78,7 +78,11 @@ Plans:
   3. When questionnaire answers are thin or ambiguous, the report explicitly says "недостаточно данных" for that block instead of fabricating conclusions.
   4. Report is stored as JSONB in the database (not raw text) and is retrievable by telegram_id.
   5. Full report cost per scan does not exceed $0.40 in Claude API (Sonnet for report; token usage logged).
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [x] 04-01-PLAN.md — FullScanAIService with 6-block Sonnet prompt, life path numerology, scan.report JSONB migration, ScanService.complete_full_scan()
+- [ ] 04-02-PLAN.md — Report delivery in full_scan handler: generate_and_deliver_report(), 8 split messages, error handling, human checkpoint
 
 ### Phase 5: Payment Gate
 **Goal**: Users must pay via Telegram Stars before the full scan runs, the payment state machine is race-condition-safe, and every transaction is logged.
@@ -131,7 +135,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 | 1. Foundation | 0/3 | Not started | - |
 | 2. Mini-Scan Flow | 2/2 | Complete    | 2026-03-20 |
 | 3. Full Scan Questionnaire | 1/2 | In Progress|  |
-| 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
+| 4. AI Engine and Report Delivery | 1/2 | In Progress | - |
 | 5. Payment Gate | 0/TBD | Not started | - |
 | 6. Admin Panel | 0/TBD | Not started | - |
 | 7. Content Generation | 0/TBD | Not started | - |

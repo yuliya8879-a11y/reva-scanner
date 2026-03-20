@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 03-full-scan-questionnaire/03-01-PLAN.md — QuestionDef module, FullScanStates, ScanService full scan methods, 41 tests
-last_updated: "2026-03-20T09:33:14.542Z"
+stopped_at: Completed 04-ai-engine-and-report-delivery/04-01-PLAN.md — FullScanAIService, calculate_life_path_number, scan.report JSONB, complete_full_scan(), 130 tests
+last_updated: "2026-03-20T20:03:00.000Z"
 progress:
   total_phases: 8
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 9
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,26 +19,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** AI business diagnostic in 15 minutes — specific, actionable, as good as a personal consultation with Yulia Reva, available 24/7 via Telegram for 3500 RUB.
-**Current focus:** Phase 3 — Full Scan Questionnaire
+**Current focus:** Phase 04 — AI Engine and Report Delivery
 
 ## Current Position
 
-Phase: 3 (Full Scan Questionnaire) — EXECUTING
+Phase: 04 (AI Engine and Report Delivery) — EXECUTING
 Plan: 2 of 2
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 2
-- Average duration: 18 min
-- Total execution time: 0.6 hours
+- Total plans completed: 5
+- Average duration: 16 min
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 02-mini-scan-flow | 2/2 | 37min | 18min |
+| 04-ai-engine-and-report-delivery | 1/2 | 12min | 12min |
 
 **Recent Trend:**
 
@@ -47,6 +48,7 @@ Plan: 2 of 2
 
 *Updated after each plan completion*
 | Phase 03-full-scan-questionnaire P01 | 5 | 2 tasks | 6 files |
+| Phase 04-ai-engine-and-report-delivery P01 | 12 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -63,6 +65,9 @@ Plan: 2 of 2
 - [Phase 02-mini-scan-flow]: _generate_and_send_report uses message_obj.bot to avoid circular import with app.main; scan_type:personal/business redirect to mini-scan (payment deferred to Phase 5)
 - [Phase 03-full-scan-questionnaire]: BUSINESS_QUESTIONS Q1-Q10 share exact same QuestionDef objects as PERSONAL_QUESTIONS via list slicing — both scan types ask the same opening 10 questions
 - [Phase 03-full-scan-questionnaire]: ScanStatus.questionnaire_complete inserted between in_progress and completed to represent state after all questions answered but before AI report generation
+- [Phase 04-ai-engine-and-report-delivery P01]: calculate_life_path_number() placed in full_scan_ai_service.py (not numerology.py) to keep it co-located with the only consumer
+- [Phase 04-ai-engine-and-report-delivery P01]: BLOCK_KEYS exported at module level so tests can import it to construct valid mock JSON without hardcoding Russian strings
+- [Phase 04-ai-engine-and-report-delivery P01]: complete_full_scan() merges token_usage into report when missing so the JSONB blob is self-contained
 
 ### Pending Todos
 
@@ -76,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T09:33:14.537Z
-Stopped at: Completed 03-full-scan-questionnaire/03-01-PLAN.md — QuestionDef module, FullScanStates, ScanService full scan methods, 41 tests
+Last session: 2026-03-20T20:03:00.000Z
+Stopped at: Completed 04-ai-engine-and-report-delivery/04-01-PLAN.md — FullScanAIService, calculate_life_path_number, scan.report JSONB, complete_full_scan(), 130 tests
 Resume file: None

@@ -16,8 +16,8 @@
 ### AI Scan Engine (AI)
 
 - [x] **AI-01**: Система генерирует мини-скан (тизер) на основе 5 ответов пользователя через Claude API
-- [ ] **AI-02**: Система генерирует полный разбор (6 блоков: архитектура, слепые зоны, энергетика/блоки owner'а, команда, деньги, рекомендации) через Claude API
-- [ ] **AI-03**: Система включает нумерологический анализ по дате рождения в полный разбор
+- [x] **AI-02**: Система генерирует полный разбор (6 блоков: архитектура, слепые зоны, энергетика/блоки owner'а, команда, деньги, рекомендации) через Claude API
+- [x] **AI-03**: Система включает нумерологический анализ по дате рождения в полный разбор
 - [x] **AI-04**: Промпты настроены так, что при недостаточных данных система явно указывает "недостаточно данных" вместо догадок
 - [x] **AI-05**: Стоимость одного полного скана не превышает $0.40 в API-расходах (используется Sonnet для разбора, Haiku для мини-скана)
 
@@ -120,8 +120,8 @@
 | BOT-03 | Phase 3 — Full Scan Questionnaire | Complete |
 | BOT-06 | Phase 3 — Full Scan Questionnaire | Complete |
 | BOT-08 | Phase 4 — AI Engine and Report Delivery | Pending |
-| AI-02 | Phase 4 — AI Engine and Report Delivery | Pending |
-| AI-03 | Phase 4 — AI Engine and Report Delivery | Pending |
+| AI-02 | Phase 4 — AI Engine and Report Delivery | Complete |
+| AI-03 | Phase 4 — AI Engine and Report Delivery | Complete |
 | PAY-01 | Phase 5 — Payment Gate | Pending |
 | PAY-02 | Phase 5 — Payment Gate | Pending |
 | PAY-03 | Phase 5 — Payment Gate | Pending |
