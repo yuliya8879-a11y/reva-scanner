@@ -62,7 +62,11 @@ Plans:
   2. User progresses through 12-15 button-driven questions with a visible progress indicator (вопрос X из Y).
   3. User can optionally enter a URL to a social media profile or website; the field is skippable.
   4. User can close Telegram mid-questionnaire and resume exactly where they left off on next /start.
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Question definitions, FullScanStates FSM group, ScanService full scan methods
+- [ ] 03-02-PLAN.md — Full scan FSM handler, dynamic question routing, /start resume detection
 
 ### Phase 4: AI Engine and Report Delivery
 **Goal**: The full Claude-powered diagnostic is generated correctly — 6 structured blocks, numerology layer, delivered as split Telegram messages — and every generated report is stored in the database.
@@ -126,7 +130,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/3 | Not started | - |
 | 2. Mini-Scan Flow | 2/2 | Complete    | 2026-03-20 |
-| 3. Full Scan Questionnaire | 0/TBD | Not started | - |
+| 3. Full Scan Questionnaire | 0/2 | Not started | - |
 | 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
 | 5. Payment Gate | 0/TBD | Not started | - |
 | 6. Admin Panel | 0/TBD | Not started | - |
