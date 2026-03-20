@@ -21,6 +21,7 @@ class ScanStatus(str, Enum):
     pending = "pending"
     collecting = "collecting"
     in_progress = "in_progress"
+    questionnaire_complete = "questionnaire_complete"
     completed = "completed"
     failed = "failed"
 
