@@ -130,7 +130,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/3 | Not started | - |
 | 2. Mini-Scan Flow | 2/2 | Complete    | 2026-03-20 |
-| 3. Full Scan Questionnaire | 0/2 | Not started | - |
+| 3. Full Scan Questionnaire | 1/2 | In Progress|  |
 | 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
 | 5. Payment Gate | 0/TBD | Not started | - |
 | 6. Admin Panel | 0/TBD | Not started | - |

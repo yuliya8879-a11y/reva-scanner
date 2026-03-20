@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02-mini-scan-flow/02-02-PLAN.md — mini-scan FSM flow with 5 questions, AI generation, upsell buttons, 21 new tests
-last_updated: "2026-03-20T09:00:53.409Z"
+stopped_at: Completed 03-full-scan-questionnaire/03-01-PLAN.md — QuestionDef module, FullScanStates, ScanService full scan methods, 41 tests
+last_updated: "2026-03-20T09:33:14.542Z"
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 2
+  total_plans: 7
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** AI business diagnostic in 15 minutes — specific, actionable, as good as a personal consultation with Yulia Reva, available 24/7 via Telegram for 3500 RUB.
-**Current focus:** Phase 2 — Mini-Scan Flow
+**Current focus:** Phase 3 — Full Scan Questionnaire
 
 ## Current Position
 
-Phase: 2 (Mini-Scan Flow) — COMPLETE
-Plan: 2 of 2 (all plans done)
+Phase: 3 (Full Scan Questionnaire) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 2 of 2 (all plans done)
 - Trend: faster
 
 *Updated after each plan completion*
+| Phase 03-full-scan-questionnaire P01 | 5 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Plan: 2 of 2 (all plans done)
 - [Phase 02-mini-scan-flow]: tests/conftest.py uses os.environ.setdefault() before import time to satisfy pydantic-settings required fields in CI without .env file
 - [Phase 02-mini-scan-flow]: parse_birth_date extracted as standalone function for testability; birth_date stored as ISO string in FSM data to survive JSON serialization
 - [Phase 02-mini-scan-flow]: _generate_and_send_report uses message_obj.bot to avoid circular import with app.main; scan_type:personal/business redirect to mini-scan (payment deferred to Phase 5)
+- [Phase 03-full-scan-questionnaire]: BUSINESS_QUESTIONS Q1-Q10 share exact same QuestionDef objects as PERSONAL_QUESTIONS via list slicing — both scan types ask the same opening 10 questions
+- [Phase 03-full-scan-questionnaire]: ScanStatus.questionnaire_complete inserted between in_progress and completed to represent state after all questions answered but before AI report generation
 
 ### Pending Todos
 
@@ -73,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T08:52:23.168Z
-Stopped at: Completed 02-mini-scan-flow/02-02-PLAN.md — mini-scan FSM flow with 5 questions, AI generation, upsell buttons, 21 new tests
+Last session: 2026-03-20T09:33:14.537Z
+Stopped at: Completed 03-full-scan-questionnaire/03-01-PLAN.md — QuestionDef module, FullScanStates, ScanService full scan methods, 41 tests
 Resume file: None
