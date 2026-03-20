@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 05-02 Payment handler wiring — payment.py, full_scan.py refactor, router.py
-last_updated: "2026-03-21T00:00:00.000Z"
+stopped_at: Completed 05-03 Payment flow test suite — tests/test_payment_flow.py 8 tests passing
+last_updated: "2026-03-20T22:15:56.855Z"
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 7
+  completed_plans: 9
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 2 of 3
 | Phase 04 P02 | 4 | 1 tasks | 3 files |
 | Phase 05-payment-gate P01 | 10 | 1 tasks | 2 files |
 | Phase 05-payment-gate P02 | 10 | 2 tasks | 3 files |
+| Phase 05-payment-gate P03 | 20 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,7 @@ Plan: 2 of 3
 - [Phase 05-payment-gate P02]: Deferred import of start_questionnaire_after_payment inside handle_successful_payment body to avoid circular import at module load time
 - [Phase 05-payment-gate P02]: payment router registered before full_scan router — buy:* callbacks intercepted by payment.py, not full_scan.py
 - [Phase 05-payment-gate P02]: handle_buy_callback removed from full_scan.py; questionnaire only starts after Stars payment confirmed via handle_successful_payment
+- [Phase 05-payment-gate]: Mock patch target for deferred import is resolved at full_scan module namespace — patch app.bot.handlers.full_scan.start_questionnaire_after_payment (not payment.py)
 
 ### Pending Todos
 
@@ -91,6 +93,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T21:34:16.546Z
-Stopped at: Completed 05-01 PaymentService — create_payment, confirm_payment, get_pending_payment
+Last session: 2026-03-20T22:15:56.851Z
+Stopped at: Completed 05-03 Payment flow test suite — tests/test_payment_flow.py 8 tests passing
 Resume file: None
