@@ -533,6 +533,120 @@ class TestCancelScan:
 
 
 # ---------------------------------------------------------------------------
+# /start incomplete scan detection tests
+# ---------------------------------------------------------------------------
+
+
+def _make_message(user_id: int = 42) -> MagicMock:
+    """Build a minimal Message mock for /start handler."""
+    msg = MagicMock()
+    msg.from_user.id = user_id
+    msg.from_user.username = "test_user"
+    msg.from_user.full_name = "Test User"
+    msg.answer = AsyncMock()
+    return msg
+
+
+class TestStartHandlerResume:
+    """Test /start handler detects incomplete scans and shows resume prompt."""
+
+    @pytest.mark.asyncio
+    async def test_start_with_incomplete_scan_shows_resume_prompt(self):
+        from app.bot.handlers.start import cmd_start
+
+        message = _make_message()
+        state = _make_state()
+        session = _make_session()
+
+        mock_user = MagicMock(id=20)
+        mock_scan = MagicMock(id=700, scan_type="personal")
+
+        with (
+            patch(
+                "app.bot.handlers.start.UserService.get_or_create",
+                new=AsyncMock(return_value=(mock_user, False)),
+            ),
+            patch(
+                "app.bot.handlers.start.ScanService.get_incomplete_scan",
+                new=AsyncMock(return_value=mock_scan),
+            ),
+        ):
+            await cmd_start(message, session, state)
+
+        message.answer.assert_called_once()
+        text = message.answer.call_args[0][0]
+        assert "незавершённый скан" in text
+        # FSM state should NOT be cleared (return early)
+        state.clear.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_start_with_incomplete_scan_shows_resume_and_cancel_buttons(self):
+        from app.bot.handlers.start import cmd_start
+
+        message = _make_message()
+        state = _make_state()
+        session = _make_session()
+
+        mock_user = MagicMock(id=21)
+        mock_scan = MagicMock(id=701, scan_type="business")
+
+        with (
+            patch(
+                "app.bot.handlers.start.UserService.get_or_create",
+                new=AsyncMock(return_value=(mock_user, False)),
+            ),
+            patch(
+                "app.bot.handlers.start.ScanService.get_incomplete_scan",
+                new=AsyncMock(return_value=mock_scan),
+            ),
+        ):
+            await cmd_start(message, session, state)
+
+        message.answer.assert_called_once()
+        call_kwargs = message.answer.call_args[1]
+        keyboard = call_kwargs.get("reply_markup")
+        assert keyboard is not None
+        flat_buttons = [btn for row in keyboard.inline_keyboard for btn in row]
+        button_callbacks = [btn.callback_data for btn in flat_buttons]
+        assert any(cb.startswith("resume_scan:") for cb in button_callbacks)
+        assert any(cb.startswith("cancel_scan:") for cb in button_callbacks)
+        button_texts = [btn.text for btn in flat_buttons]
+        assert any("Продолжить" in t for t in button_texts)
+
+    @pytest.mark.asyncio
+    async def test_start_without_incomplete_scan_shows_normal_menu(self):
+        from app.bot.handlers.start import cmd_start
+
+        message = _make_message()
+        state = _make_state()
+        session = _make_session()
+
+        mock_user = MagicMock(id=22)
+
+        with (
+            patch(
+                "app.bot.handlers.start.UserService.get_or_create",
+                new=AsyncMock(return_value=(mock_user, False)),
+            ),
+            patch(
+                "app.bot.handlers.start.ScanService.get_incomplete_scan",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            await cmd_start(message, session, state)
+
+        # Normal menu shown: FSM cleared, message answered with scan options
+        state.clear.assert_called_once()
+        message.answer.assert_called_once()
+        call_kwargs = message.answer.call_args[1]
+        keyboard = call_kwargs.get("reply_markup")
+        assert keyboard is not None
+        flat_buttons = [btn for row in keyboard.inline_keyboard for btn in row]
+        button_callbacks = [btn.callback_data for btn in flat_buttons]
+        assert "scan_type:mini" in button_callbacks
+
+
+# ---------------------------------------------------------------------------
 # Router includes full_scan
 # ---------------------------------------------------------------------------
 
