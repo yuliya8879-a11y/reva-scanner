@@ -1,7 +1,7 @@
 """Full scan FSM handler: dynamic 12-15 question questionnaire with progress indicator.
 
 Entry points:
-  - buy:personal / buy:business callbacks (from upsell after mini-scan)
+  - start_questionnaire_after_payment() called by payment handler after Stars payment confirmed
   - resume_scan:{scan_id} callback (from /start resume prompt)
   - cancel_scan:{scan_id} callback (from /start cancel prompt)
 
@@ -203,58 +203,40 @@ async def _advance_to_next(
 
 
 # ---------------------------------------------------------------------------
-# Entry: buy:personal / buy:business callbacks
+# Public entry point called by payment handler after Stars payment confirmed
 # ---------------------------------------------------------------------------
 
 
-@router.callback_query(lambda c: c.data in ("buy:personal", "buy:business"))
-async def handle_buy_callback(
-    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+async def start_questionnaire_after_payment(
+    bot: Bot,
+    chat_id: int,
+    scan_id: int,
+    scan_type: str,
+    state: FSMContext,
+    session: AsyncSession,
 ) -> None:
-    """Start the full scan questionnaire when user taps buy from upsell."""
-    scan_type = callback.data.split(":")[1]  # "personal" or "business"
+    """Start the full scan questionnaire after payment is confirmed.
 
-    user_service = UserService(session)
-    user, _ = await user_service.get_or_create(
-        telegram_id=callback.from_user.id,
-        username=callback.from_user.username,
-        full_name=callback.from_user.full_name,
-    )
-
+    Called by app.bot.handlers.payment.handle_successful_payment.
+    Resets FSM state to first unanswered question (or question 0 if scan is fresh).
+    """
     scan_service = ScanService(session)
-    existing = await scan_service.get_incomplete_scan(user.id)
-
-    if existing is not None:
-        if existing.scan_type == scan_type:
-            # Resume same type — calculate where we left off
-            current_index = len(existing.answers or {})
-            scan = existing
-        else:
-            # Different type — cancel old, start fresh
-            existing.status = ScanStatus.failed.value
-            await session.commit()
-            scan = await scan_service.create_full_scan(user.id, scan_type)
-            current_index = 0
-    else:
-        scan = await scan_service.create_full_scan(user.id, scan_type)
-        current_index = 0
+    scan = await scan_service.get_scan(scan_id)
+    current_index = len(scan.answers or {}) if scan is not None else 0
+    total = get_total_questions(scan_type)
+    questions = get_questions_for_type(scan_type)
 
     await state.update_data(
-        scan_id=scan.id,
-        user_id=user.id,
+        scan_id=scan_id,
+        user_id=scan.user_id if scan is not None else 0,
         scan_type=scan_type,
         current_index=current_index,
     )
-
-    total = get_total_questions(scan_type)
-    questions = get_questions_for_type(scan_type)
-    first_question = questions[current_index]
-
     fsm_state = getattr(FullScanStates, f"q{current_index}")
     await state.set_state(fsm_state)
 
-    await _send_question(callback.message.bot, callback.message.chat.id, first_question, current_index, total)
-    await callback.answer()
+    first_question = questions[current_index]
+    await _send_question(bot, chat_id, first_question, current_index, total)
 
 
 # ---------------------------------------------------------------------------
