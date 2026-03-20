@@ -17,6 +17,7 @@ FSM data structure stored in aiogram state:
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
@@ -32,10 +33,20 @@ from app.bot.handlers.mini_scan import parse_birth_date
 from app.bot.questions import QuestionDef, get_questions_for_type, get_total_questions
 from app.bot.states import FullScanStates
 from app.models.scan import ScanStatus
+from app.services.full_scan_ai_service import BLOCK_KEYS, FullScanAIService
 from app.services.scan_service import ScanService
 from app.services.user_service import UserService
 
 logger = logging.getLogger(__name__)
+
+_BLOCK_LABELS = {
+    "архитектура": "Архитектура",
+    "слепые_зоны": "Слепые зоны",
+    "энергетические_блоки": "Энергетические блоки owner'а",
+    "команда": "Команда",
+    "деньги": "Деньги",
+    "рекомендации": "Рекомендации",
+}
 
 router = Router(name="full_scan")
 
@@ -52,6 +63,84 @@ def _make_keyboard(buttons: list[tuple[str, str]]) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text=t, callback_data=cd)] for t, cd in buttons
         ]
     )
+
+
+async def generate_and_deliver_report(
+    bot: Bot,
+    chat_id: int,
+    scan_id: int,
+    scan_type: str,
+    session: AsyncSession,
+) -> None:
+    """Generate full AI report and deliver as split Telegram messages.
+
+    Sends 8 messages total:
+      1. Status message ("Генерирую отчёт...")
+      2. Numerology block
+      3-8. Six content blocks (архитектура, слепые_зоны, ..., рекомендации)
+
+    On error (missing birth_date or AI failure): sets scan.status=failed,
+    commits, and sends a user-visible error message.
+    """
+    scan_service = ScanService(session)
+
+    await bot.send_message(chat_id, "Генерирую отчёт... Это займёт около 30 секунд.")
+
+    scan = await scan_service.get_scan(scan_id)
+    answers = scan.answers or {}
+
+    birth_date_str = answers.get("birth_date", "")
+    try:
+        birth_date = date.fromisoformat(birth_date_str)
+    except (ValueError, TypeError):
+        logger.error(
+            "Missing or invalid birth_date for scan_id=%s: %r", scan_id, birth_date_str
+        )
+        scan.status = ScanStatus.failed.value
+        await session.commit()
+        await bot.send_message(
+            chat_id,
+            "Не удалось определить дату рождения. Пожалуйста, начните скан заново (/start).",
+        )
+        return
+
+    try:
+        ai_service = FullScanAIService()
+        report = await ai_service.generate_full_report(answers, birth_date, scan_type)
+    except Exception:
+        logger.exception("AI generation failed for scan_id=%s", scan_id)
+        scan.status = ScanStatus.failed.value
+        await session.commit()
+        await bot.send_message(
+            chat_id,
+            "Произошла ошибка при генерации отчёта. Пожалуйста, попробуйте позже или обратитесь в поддержку.",
+        )
+        return
+
+    token_usage = report.get("token_usage", {})
+    await scan_service.complete_full_scan(scan_id, report, token_usage)
+
+    # Deliver numerology block first
+    numerology = report.get("numerology", {})
+    await bot.send_message(
+        chat_id,
+        (
+            f"*Нумерология*\n"
+            f"Число души: {numerology.get('soul_number', '—')}\n"
+            f"Число жизненного пути: {numerology.get('life_path_number', '—')}"
+        ),
+        parse_mode="Markdown",
+    )
+
+    # Deliver 6 content blocks
+    for key in BLOCK_KEYS:
+        label = _BLOCK_LABELS[key]
+        content = report.get(key, "недостаточно данных для анализа этого аспекта")
+        await bot.send_message(
+            chat_id,
+            f"*{label}*\n\n{content}",
+            parse_mode="Markdown",
+        )
 
 
 async def _send_question(
@@ -101,8 +190,9 @@ async def _advance_to_next(
         scan_service = ScanService(session)
         await scan_service.complete_questionnaire(scan_id)
         await state.set_state(FullScanStates.completing)
-        await bot.send_message(chat_id, "Анкета заполнена! Запускаю анализ...")
+        await bot.send_message(chat_id, "Анкета заполнена!")
         await state.clear()
+        await generate_and_deliver_report(bot, chat_id, scan_id, scan_type, session)
     else:
         questions = get_questions_for_type(scan_type)
         next_question = questions[next_index]

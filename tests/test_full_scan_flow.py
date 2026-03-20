@@ -389,6 +389,10 @@ class TestHandleSkipAnswer:
                 "app.bot.handlers.full_scan.ScanService.complete_questionnaire",
                 new=AsyncMock(return_value=MagicMock()),
             ),
+            patch(
+                "app.bot.handlers.full_scan.generate_and_deliver_report",
+                new=AsyncMock(),
+            ),
         ):
             await handle_skip_answer(callback, state, session)
 
@@ -424,6 +428,10 @@ class TestCompletionMessage:
             patch(
                 "app.bot.handlers.full_scan.ScanService.complete_questionnaire",
                 new=AsyncMock(return_value=MagicMock()),
+            ),
+            patch(
+                "app.bot.handlers.full_scan.generate_and_deliver_report",
+                new=AsyncMock(),
             ),
         ):
             await handle_skip_answer(callback, state, session)
