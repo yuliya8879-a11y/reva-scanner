@@ -40,7 +40,7 @@ Plans:
 ### Phase 2: Mini-Scan Flow
 **Goal**: Users can complete a free 5-question diagnostic and receive a teaser report that names one specific business pain point, setting up the paid conversion.
 **Depends on**: Phase 1
-**Requirements**: BOT-02, BOT-04, BOT-05, BOT-06, BOT-07, AI-01, AI-04, AI-05
+**Requirements**: BOT-02, BOT-04, BOT-05, BOT-07, AI-01, AI-04, AI-05
 **Success Criteria** (what must be TRUE):
   1. User navigates the mini-scan entirely via inline keyboard buttons (no free-text required except the optional situation field).
   2. User enters a birth date and the system stores it in their profile for later numerology analysis.
