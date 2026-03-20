@@ -11,7 +11,7 @@
 - [x] **BOT-05**: Пользователь может ответить на 12-15 вопросов анкеты через кнопки (не текст) с одним опциональным текстовым полем
 - [x] **BOT-06**: Пользователь может ввести ссылку на соцсеть/сайт бизнеса для анализа цифрового следа
 - [x] **BOT-07**: Пользователь видит сообщение "сканирую..." пока система обрабатывает запрос (не зависает)
-- [ ] **BOT-08**: Пользователь получает полный отчёт-разбор структурированным текстом в Telegram
+- [x] **BOT-08**: Пользователь получает полный отчёт-разбор структурированным текстом в Telegram
 
 ### AI Scan Engine (AI)
 
@@ -119,7 +119,7 @@
 | AI-05 | Phase 2 — Mini-Scan Flow | Complete |
 | BOT-03 | Phase 3 — Full Scan Questionnaire | Complete |
 | BOT-06 | Phase 3 — Full Scan Questionnaire | Complete |
-| BOT-08 | Phase 4 — AI Engine and Report Delivery | Pending |
+| BOT-08 | Phase 4 — AI Engine and Report Delivery | Complete |
 | AI-02 | Phase 4 — AI Engine and Report Delivery | Complete |
 | AI-03 | Phase 4 — AI Engine and Report Delivery | Complete |
 | PAY-01 | Phase 5 — Payment Gate | Pending |

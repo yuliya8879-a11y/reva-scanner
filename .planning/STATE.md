@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 04-ai-engine-and-report-delivery/04-01-PLAN.md — FullScanAIService, calculate_life_path_number, scan.report JSONB, complete_full_scan(), 130 tests
-last_updated: "2026-03-20T20:03:00.000Z"
+stopped_at: "Checkpoint: 04-02 Task 1 complete — generate_and_deliver_report wired, 142 tests pass. Awaiting human-verify of live report output."
+last_updated: "2026-03-20T20:11:54.752Z"
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 9
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -49,6 +49,7 @@ Plan: 2 of 2
 *Updated after each plan completion*
 | Phase 03-full-scan-questionnaire P01 | 5 | 2 tasks | 6 files |
 | Phase 04-ai-engine-and-report-delivery P01 | 12 | 2 tasks | 5 files |
+| Phase 04 P02 | 4 | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Plan: 2 of 2
 - [Phase 04-ai-engine-and-report-delivery P01]: calculate_life_path_number() placed in full_scan_ai_service.py (not numerology.py) to keep it co-located with the only consumer
 - [Phase 04-ai-engine-and-report-delivery P01]: BLOCK_KEYS exported at module level so tests can import it to construct valid mock JSON without hardcoding Russian strings
 - [Phase 04-ai-engine-and-report-delivery P01]: complete_full_scan() merges token_usage into report when missing so the JSONB blob is self-contained
+- [Phase 04-ai-engine-and-report-delivery]: _BLOCK_LABELS maps Russian BLOCK_KEYS to display labels including 'Энергетические блоки owner'а' — loop over BLOCK_KEYS produces 7 runtime parse_mode calls from 2 source lines
 
 ### Pending Todos
 
@@ -81,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T20:03:00.000Z
-Stopped at: Completed 04-ai-engine-and-report-delivery/04-01-PLAN.md — FullScanAIService, calculate_life_path_number, scan.report JSONB, complete_full_scan(), 130 tests
+Last session: 2026-03-20T20:11:54.748Z
+Stopped at: Checkpoint: 04-02 Task 1 complete — generate_and_deliver_report wired, 142 tests pass. Awaiting human-verify of live report output.
 Resume file: None
