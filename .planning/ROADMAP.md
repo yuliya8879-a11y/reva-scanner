@@ -93,7 +93,12 @@ Plans:
   2. Full scan does not start until payment webhook confirms success — no exploit window exists where payment is bypassed.
   3. User sees a "ждем подтверждения..." message after paying and receives the full report automatically within 60 seconds of confirmation.
   4. Every transaction is logged in the database with telegram_id, amount, status, and timestamp.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — PaymentService: create_payment, confirm_payment (idempotent), get_pending_payment
+- [ ] 05-02-PLAN.md — payment handler (invoice + pre_checkout + successful_payment), full_scan refactor, router wiring
+- [ ] 05-03-PLAN.md — Test suite: PaymentService unit tests + handler tests (8 cases)
 
 ### Phase 6: Admin Panel
 **Goal**: Yulia can inspect all clients and their scans, and send arbitrary messages to any client directly through the bot, without touching the database.
@@ -136,7 +141,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 | 2. Mini-Scan Flow | 2/2 | Complete    | 2026-03-20 |
 | 3. Full Scan Questionnaire | 1/2 | In Progress|  |
 | 4. AI Engine and Report Delivery | 2/2 | Complete   | 2026-03-20 |
-| 5. Payment Gate | 0/TBD | Not started | - |
+| 5. Payment Gate | 1/3 | In Progress|  |
 | 6. Admin Panel | 0/TBD | Not started | - |
 | 7. Content Generation | 0/TBD | Not started | - |
 | 8. Content Scheduler | 0/TBD | Not started | - |

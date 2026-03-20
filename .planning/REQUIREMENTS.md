@@ -24,9 +24,9 @@
 ### Payment (PAY)
 
 - [ ] **PAY-01**: Пользователь может оплатить полный скан через Telegram Stars (3500₽ эквивалент)
-- [ ] **PAY-02**: Система проверяет оплату перед запуском полного скана и не запускает без подтверждения
+- [x] **PAY-02**: Система проверяет оплату перед запуском полного скана и не запускает без подтверждения
 - [ ] **PAY-03**: Пользователь получает разбор автоматически после успешной оплаты
-- [ ] **PAY-04**: Система логирует все транзакции в БД (telegram_id, сумма, статус, timestamp)
+- [x] **PAY-04**: Система логирует все транзакции в БД (telegram_id, сумма, статус, timestamp)
 
 ### Database (DB)
 
@@ -123,9 +123,9 @@
 | AI-02 | Phase 4 — AI Engine and Report Delivery | Complete |
 | AI-03 | Phase 4 — AI Engine and Report Delivery | Complete |
 | PAY-01 | Phase 5 — Payment Gate | Pending |
-| PAY-02 | Phase 5 — Payment Gate | Pending |
+| PAY-02 | Phase 5 — Payment Gate | Complete |
 | PAY-03 | Phase 5 — Payment Gate | Pending |
-| PAY-04 | Phase 5 — Payment Gate | Pending |
+| PAY-04 | Phase 5 — Payment Gate | Complete |
 | ADM-01 | Phase 6 — Admin Panel | Pending |
 | ADM-02 | Phase 6 — Admin Panel | Pending |
 | CNT-01 | Phase 7 — Content Generation | Pending |

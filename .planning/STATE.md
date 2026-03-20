@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: "Checkpoint: 04-02 Task 1 complete — generate_and_deliver_report wired, 142 tests pass. Awaiting human-verify of live report output."
-last_updated: "2026-03-20T20:24:25.526Z"
+stopped_at: Completed 05-01 PaymentService — create_payment, confirm_payment, get_pending_payment
+last_updated: "2026-03-20T21:34:16.551Z"
 progress:
   total_phases: 8
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 6
+  total_plans: 12
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** AI business diagnostic in 15 minutes — specific, actionable, as good as a personal consultation with Yulia Reva, available 24/7 via Telegram for 3500 RUB.
-**Current focus:** Phase 04 — AI Engine and Report Delivery
+**Current focus:** Phase 05 — Payment Gate
 
 ## Current Position
 
-Phase: 04 (AI Engine and Report Delivery) — EXECUTING
-Plan: 2 of 2
+Phase: 05 (Payment Gate) — EXECUTING
+Plan: 1 of 3
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: 2 of 2
 | Phase 03-full-scan-questionnaire P01 | 5 | 2 tasks | 6 files |
 | Phase 04-ai-engine-and-report-delivery P01 | 12 | 2 tasks | 5 files |
 | Phase 04 P02 | 4 | 1 tasks | 3 files |
+| Phase 05-payment-gate P01 | 10 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ Plan: 2 of 2
 - [Phase 04-ai-engine-and-report-delivery P01]: BLOCK_KEYS exported at module level so tests can import it to construct valid mock JSON without hardcoding Russian strings
 - [Phase 04-ai-engine-and-report-delivery P01]: complete_full_scan() merges token_usage into report when missing so the JSONB blob is self-contained
 - [Phase 04-ai-engine-and-report-delivery]: _BLOCK_LABELS maps Russian BLOCK_KEYS to display labels including 'Энергетические блоки owner'а' — loop over BLOCK_KEYS produces 7 runtime parse_mode calls from 2 source lines
+- [Phase 05-payment-gate]: confirm_payment is idempotent: checks payment.status == 'paid' before mutating, returns early without commit to prevent double-setting paid_at on Telegram webhook retries
+- [Phase 05-payment-gate]: Scan update (is_paid + payment_id) co-located in confirm_payment for single-commit atomicity — not delegated to ScanService
+- [Phase 05-payment-gate]: get_pending_payment uses JOIN Payment+Scan on scan_type so bot handlers never need to fetch Scan separately
 
 ### Pending Todos
 
@@ -83,6 +87,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-20T20:11:54.748Z
-Stopped at: Checkpoint: 04-02 Task 1 complete — generate_and_deliver_report wired, 142 tests pass. Awaiting human-verify of live report output.
+Last session: 2026-03-20T21:34:16.546Z
+Stopped at: Completed 05-01 PaymentService — create_payment, confirm_payment, get_pending_payment
 Resume file: None
