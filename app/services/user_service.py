@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Optional, Tuple
 
 from sqlalchemy import select
@@ -11,6 +12,18 @@ from app.models.user import User
 class UserService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def update_birth_date(self, telegram_id: int, birth_date: date) -> Optional[User]:
+        """Update birth_date for the user identified by telegram_id."""
+        result = await self.session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            user.birth_date = birth_date
+            await self.session.commit()
+            await self.session.refresh(user)
+        return user
 
     async def get_or_create(
         self,
