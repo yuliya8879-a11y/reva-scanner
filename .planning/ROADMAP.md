@@ -11,7 +11,7 @@ Reva Scanner is built in eight phases that follow a strict dependency chain: inf
 - Decimal phases: Urgent insertions (marked INSERTED)
 
 - [ ] **Phase 1: Foundation** - Project skeleton, Railway deploy, PostgreSQL schema, bot webhook wired
-- [ ] **Phase 2: Mini-Scan Flow** - Free 5-question FSM, AI teaser generation, birth date capture
+- [x] **Phase 2: Mini-Scan Flow** - Free 5-question FSM, AI teaser generation, birth date capture (completed 2026-03-20)
 - [ ] **Phase 3: Full Scan Questionnaire** - 12-15 question FSM, social URL input, upgrade CTA from mini-scan
 - [ ] **Phase 4: AI Engine and Report Delivery** - Full 6-block Claude report, numerology layer, Telegram delivery
 - [ ] **Phase 5: Payment Gate** - Telegram Stars payment, state machine, scan unlock after confirmation
@@ -125,7 +125,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 0/3 | Not started | - |
-| 2. Mini-Scan Flow | 1/2 | In Progress|  |
+| 2. Mini-Scan Flow | 2/2 | Complete   | 2026-03-20 |
 | 3. Full Scan Questionnaire | 0/TBD | Not started | - |
 | 4. AI Engine and Report Delivery | 0/TBD | Not started | - |
 | 5. Payment Gate | 0/TBD | Not started | - |

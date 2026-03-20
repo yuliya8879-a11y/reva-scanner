@@ -5,12 +5,12 @@
 ### Bot Core (BOT)
 
 - [ ] **BOT-01**: Пользователь может запустить бота командой /start и получить приветствие с описанием сканера
-- [ ] **BOT-02**: Пользователь может пройти мини-скан (5 вопросов) бесплатно и получить тизер-разбор с одной болевой точкой
+- [x] **BOT-02**: Пользователь может пройти мини-скан (5 вопросов) бесплатно и получить тизер-разбор с одной болевой точкой
 - [ ] **BOT-03**: Пользователь может запустить полный скан из мини-скана одной кнопкой
-- [ ] **BOT-04**: Пользователь может ввести дату рождения в боте и система сохраняет её для нумерологического анализа
-- [ ] **BOT-05**: Пользователь может ответить на 12-15 вопросов анкеты через кнопки (не текст) с одним опциональным текстовым полем
-- [ ] **BOT-06**: Пользователь может ввести ссылку на соцсеть/сайт бизнеса для анализа цифрового следа
-- [ ] **BOT-07**: Пользователь видит сообщение "сканирую..." пока система обрабатывает запрос (не зависает)
+- [x] **BOT-04**: Пользователь может ввести дату рождения в боте и система сохраняет её для нумерологического анализа
+- [x] **BOT-05**: Пользователь может ответить на 12-15 вопросов анкеты через кнопки (не текст) с одним опциональным текстовым полем
+- [x] **BOT-06**: Пользователь может ввести ссылку на соцсеть/сайт бизнеса для анализа цифрового следа
+- [x] **BOT-07**: Пользователь видит сообщение "сканирую..." пока система обрабатывает запрос (не зависает)
 - [ ] **BOT-08**: Пользователь получает полный отчёт-разбор структурированным текстом в Telegram
 
 ### AI Scan Engine (AI)
@@ -110,15 +110,15 @@
 | DB-01 | Phase 1 — Foundation | Pending |
 | DB-02 | Phase 1 — Foundation | Pending |
 | DB-03 | Phase 1 — Foundation | Pending |
-| BOT-02 | Phase 2 — Mini-Scan Flow | Pending |
-| BOT-04 | Phase 2 — Mini-Scan Flow | Pending |
-| BOT-05 | Phase 2 — Mini-Scan Flow | Pending |
-| BOT-07 | Phase 2 — Mini-Scan Flow | Pending |
+| BOT-02 | Phase 2 — Mini-Scan Flow | Complete |
+| BOT-04 | Phase 2 — Mini-Scan Flow | Complete |
+| BOT-05 | Phase 2 — Mini-Scan Flow | Complete |
+| BOT-07 | Phase 2 — Mini-Scan Flow | Complete |
 | AI-01 | Phase 2 — Mini-Scan Flow | Complete |
 | AI-04 | Phase 2 — Mini-Scan Flow | Complete |
 | AI-05 | Phase 2 — Mini-Scan Flow | Complete |
 | BOT-03 | Phase 3 — Full Scan Questionnaire | Pending |
-| BOT-06 | Phase 3 — Full Scan Questionnaire | Pending |
+| BOT-06 | Phase 3 — Full Scan Questionnaire | Complete |
 | BOT-08 | Phase 4 — AI Engine and Report Delivery | Pending |
 | AI-02 | Phase 4 — AI Engine and Report Delivery | Pending |
 | AI-03 | Phase 4 — AI Engine and Report Delivery | Pending |
