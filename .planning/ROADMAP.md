@@ -141,7 +141,7 @@ Phases 1 → 2 → 3 → 4 → 5 → 6 in sequence. Phase 7 can start after Phas
 | 2. Mini-Scan Flow | 2/2 | Complete    | 2026-03-20 |
 | 3. Full Scan Questionnaire | 1/2 | In Progress|  |
 | 4. AI Engine and Report Delivery | 2/2 | Complete   | 2026-03-20 |
-| 5. Payment Gate | 1/3 | In Progress|  |
+| 5. Payment Gate | 2/3 | In Progress|  |
 | 6. Admin Panel | 0/TBD | Not started | - |
 | 7. Content Generation | 0/TBD | Not started | - |
 | 8. Content Scheduler | 0/TBD | Not started | - |
