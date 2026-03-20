@@ -170,6 +170,7 @@ def _make_callback(data: str, user_id: int = 42) -> MagicMock:
     callback.message.answer = AsyncMock()
     callback.message.bot = MagicMock()
     callback.message.bot.send_message = AsyncMock()
+    callback.message.bot.send_invoice = AsyncMock()
     callback.message.chat.id = 999
     return callback
 
@@ -203,24 +204,28 @@ class TestHandleBuyCallback:
 
         with (
             patch(
-                "app.bot.handlers.full_scan.UserService.get_or_create",
+                "app.bot.handlers.payment.UserService.get_or_create",
                 new=AsyncMock(return_value=(mock_user, True)),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.get_incomplete_scan",
+                "app.bot.handlers.payment.ScanService.get_incomplete_scan",
                 new=AsyncMock(return_value=None),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.create_full_scan",
+                "app.bot.handlers.payment.ScanService.create_full_scan",
                 new=AsyncMock(return_value=mock_scan),
+            ),
+            patch(
+                "app.bot.handlers.payment.PaymentService",
+                new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        state.set_state.assert_called()
-        # Should have been called with FullScanStates.q0
-        call_args = state.set_state.call_args[0][0]
-        assert call_args == FullScanStates.q0
+        # New behavior: sends invoice, does not set FSM state directly
+        callback.message.bot.send_invoice.assert_awaited_once()
+        call_kwargs = callback.message.bot.send_invoice.call_args[1]
+        assert call_kwargs["currency"] == "XTR"
 
     @pytest.mark.asyncio
     async def test_buy_business_creates_scan(self):
@@ -233,24 +238,28 @@ class TestHandleBuyCallback:
 
         with (
             patch(
-                "app.bot.handlers.full_scan.UserService.get_or_create",
+                "app.bot.handlers.payment.UserService.get_or_create",
                 new=AsyncMock(return_value=(mock_user, False)),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.get_incomplete_scan",
+                "app.bot.handlers.payment.ScanService.get_incomplete_scan",
                 new=AsyncMock(return_value=None),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.create_full_scan",
+                "app.bot.handlers.payment.ScanService.create_full_scan",
                 new=AsyncMock(return_value=mock_scan),
+            ),
+            patch(
+                "app.bot.handlers.payment.PaymentService",
+                new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        state.update_data.assert_called()
-        # scan_type should be "business"
-        call_kwargs = state.update_data.call_args[1]
-        assert call_kwargs["scan_type"] == "business"
+        # New behavior: sends invoice for business scan
+        callback.message.bot.send_invoice.assert_awaited_once()
+        call_kwargs = callback.message.bot.send_invoice.call_args[1]
+        assert call_kwargs["currency"] == "XTR"
 
     @pytest.mark.asyncio
     async def test_buy_personal_resumes_same_type_incomplete_scan(self):
@@ -269,19 +278,24 @@ class TestHandleBuyCallback:
 
         with (
             patch(
-                "app.bot.handlers.full_scan.UserService.get_or_create",
+                "app.bot.handlers.payment.UserService.get_or_create",
                 new=AsyncMock(return_value=(mock_user, False)),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.get_incomplete_scan",
+                "app.bot.handlers.payment.ScanService.get_incomplete_scan",
                 new=AsyncMock(return_value=mock_scan),
+            ),
+            patch(
+                "app.bot.handlers.payment.PaymentService",
+                new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        call_kwargs = state.update_data.call_args[1]
-        assert call_kwargs["current_index"] == 3
-        assert call_kwargs["scan_id"] == 200
+        # Resumes existing scan — sends invoice for it
+        callback.message.bot.send_invoice.assert_awaited_once()
+        call_kwargs = callback.message.bot.send_invoice.call_args[1]
+        assert "scan:200:" in call_kwargs["payload"]
 
     @pytest.mark.asyncio
     async def test_buy_business_cancels_different_type_incomplete_scan(self):
@@ -300,16 +314,20 @@ class TestHandleBuyCallback:
 
         with (
             patch(
-                "app.bot.handlers.full_scan.UserService.get_or_create",
+                "app.bot.handlers.payment.UserService.get_or_create",
                 new=AsyncMock(return_value=(mock_user, False)),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.get_incomplete_scan",
+                "app.bot.handlers.payment.ScanService.get_incomplete_scan",
                 new=AsyncMock(return_value=mock_existing),
             ),
             patch(
-                "app.bot.handlers.full_scan.ScanService.create_full_scan",
+                "app.bot.handlers.payment.ScanService.create_full_scan",
                 new=AsyncMock(return_value=mock_new_scan),
+            ),
+            patch(
+                "app.bot.handlers.payment.PaymentService",
+                new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
         ):
             await handle_buy_callback(callback, state, session)
@@ -317,10 +335,11 @@ class TestHandleBuyCallback:
         # Old scan should be marked failed
         assert mock_existing.status == "failed"
         session.commit.assert_called()
-        # New scan created
-        call_kwargs = state.update_data.call_args[1]
-        assert call_kwargs["scan_id"] == 301
-        assert call_kwargs["current_index"] == 0
+        # Invoice sent for new scan
+        callback.message.bot.send_invoice.assert_awaited_once()
+        call_kwargs = callback.message.bot.send_invoice.call_args[1]
+        assert call_kwargs["currency"] == "XTR"
+        assert "scan:301:" in call_kwargs["payload"]
 
 
 # ---------------------------------------------------------------------------
