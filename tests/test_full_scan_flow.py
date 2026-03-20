@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.bot.handlers.payment import handle_buy_callback
 from app.bot.handlers.full_scan import (
     _send_question,
-    handle_buy_callback,
     handle_keyboard_answer,
     handle_skip_answer,
     handle_text_answer,
