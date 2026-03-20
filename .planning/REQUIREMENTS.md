@@ -15,11 +15,11 @@
 
 ### AI Scan Engine (AI)
 
-- [ ] **AI-01**: Система генерирует мини-скан (тизер) на основе 5 ответов пользователя через Claude API
+- [x] **AI-01**: Система генерирует мини-скан (тизер) на основе 5 ответов пользователя через Claude API
 - [ ] **AI-02**: Система генерирует полный разбор (6 блоков: архитектура, слепые зоны, энергетика/блоки owner'а, команда, деньги, рекомендации) через Claude API
 - [ ] **AI-03**: Система включает нумерологический анализ по дате рождения в полный разбор
-- [ ] **AI-04**: Промпты настроены так, что при недостаточных данных система явно указывает "недостаточно данных" вместо догадок
-- [ ] **AI-05**: Стоимость одного полного скана не превышает $0.40 в API-расходах (используется Sonnet для разбора, Haiku для мини-скана)
+- [x] **AI-04**: Промпты настроены так, что при недостаточных данных система явно указывает "недостаточно данных" вместо догадок
+- [x] **AI-05**: Стоимость одного полного скана не превышает $0.40 в API-расходах (используется Sonnet для разбора, Haiku для мини-скана)
 
 ### Payment (PAY)
 
@@ -114,9 +114,9 @@
 | BOT-04 | Phase 2 — Mini-Scan Flow | Pending |
 | BOT-05 | Phase 2 — Mini-Scan Flow | Pending |
 | BOT-07 | Phase 2 — Mini-Scan Flow | Pending |
-| AI-01 | Phase 2 — Mini-Scan Flow | Pending |
-| AI-04 | Phase 2 — Mini-Scan Flow | Pending |
-| AI-05 | Phase 2 — Mini-Scan Flow | Pending |
+| AI-01 | Phase 2 — Mini-Scan Flow | Complete |
+| AI-04 | Phase 2 — Mini-Scan Flow | Complete |
+| AI-05 | Phase 2 — Mini-Scan Flow | Complete |
 | BOT-03 | Phase 3 — Full Scan Questionnaire | Pending |
 | BOT-06 | Phase 3 — Full Scan Questionnaire | Pending |
 | BOT-08 | Phase 4 — AI Engine and Report Delivery | Pending |
