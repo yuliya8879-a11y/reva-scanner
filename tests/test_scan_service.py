@@ -414,3 +414,75 @@ async def test_get_answer_count_returns_zero_when_answers_none():
     count = await service.get_answer_count(scan_id=11)
 
     assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# Tests: complete_full_scan
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_complete_full_scan_sets_report_and_status():
+    """complete_full_scan must store report dict, set status=completed, and set completed_at."""
+    session = _make_session()
+    existing_scan = _make_scan_mock(scan_id=1)
+    existing_scan.status = ScanStatus.questionnaire_complete.value
+    existing_scan.report = None
+    existing_scan.completed_at = None
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = existing_scan
+    session.execute.return_value = mock_result
+    session.refresh.return_value = None
+
+    service = ScanService(session)
+    report_dict = {
+        "архитектура": "текст",
+        "слепые_зоны": "текст",
+        "энергетические_блоки": "текст",
+        "команда": "текст",
+        "деньги": "текст",
+        "рекомендации": "текст",
+        "numerology": {"soul_number": 3, "life_path_number": 3, "birth_date": "1990-05-15"},
+        "token_usage": {"input_tokens": 1000, "output_tokens": 500},
+    }
+    token_usage = {"input_tokens": 1000, "output_tokens": 500}
+
+    before = datetime.now(timezone.utc)
+    result = await service.complete_full_scan(
+        scan_id=1,
+        report=report_dict,
+        token_usage=token_usage,
+    )
+    after = datetime.now(timezone.utc)
+
+    assert result.report == report_dict
+    assert result.status == ScanStatus.completed.value
+    assert result.completed_at is not None
+    assert before <= result.completed_at <= after
+    session.commit.assert_awaited_once()
+    session.refresh.assert_awaited_once_with(existing_scan)
+
+
+@pytest.mark.asyncio
+async def test_complete_full_scan_embeds_token_usage_when_missing():
+    """complete_full_scan must embed token_usage in report if it is not already present."""
+    session = _make_session()
+    existing_scan = _make_scan_mock(scan_id=2)
+    existing_scan.status = ScanStatus.questionnaire_complete.value
+    existing_scan.report = None
+    existing_scan.completed_at = None
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = existing_scan
+    session.execute.return_value = mock_result
+    session.refresh.return_value = None
+
+    service = ScanService(session)
+    # report dict WITHOUT token_usage key
+    report_dict = {"архитектура": "текст"}
+    token_usage = {"input_tokens": 200, "output_tokens": 100}
+
+    await service.complete_full_scan(scan_id=2, report=report_dict, token_usage=token_usage)
+
+    assert existing_scan.report["token_usage"] == token_usage

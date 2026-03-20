@@ -35,7 +35,7 @@ class Scan(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=ScanStatus.pending)
     answers: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     numerology: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    report: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     mini_report: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_paid: Mapped[bool] = mapped_column(default=False, nullable=False)
     # FK back to Payment; use_alter avoids circular FK dependency at DDL time

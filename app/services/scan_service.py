@@ -151,6 +151,34 @@ class ScanService:
         await self.session.refresh(scan)
         return scan
 
+    async def complete_full_scan(
+        self,
+        scan_id: int,
+        report: dict,
+        token_usage: dict,
+    ) -> Scan:
+        """Store the full AI report as JSONB, mark scan as completed.
+
+        Args:
+            scan_id: Primary key of the Scan to finalize.
+            report: Full 6-block report dict from FullScanAIService.generate_full_report().
+                    token_usage is embedded inside report under "token_usage" key.
+            token_usage: Passed separately for explicit logging; merged into report if missing.
+
+        Returns:
+            The updated and refreshed Scan instance.
+        """
+        scan = await self._get_or_raise(scan_id)
+        # Embed token_usage in report for completeness
+        if "token_usage" not in report:
+            report = {**report, "token_usage": token_usage}
+        scan.report = report
+        scan.status = ScanStatus.completed.value
+        scan.completed_at = datetime.now(timezone.utc)
+        await self.session.commit()
+        await self.session.refresh(scan)
+        return scan
+
     async def get_answer_count(self, scan_id: int) -> int:
         """Return the number of answers collected so far for a scan.
 
