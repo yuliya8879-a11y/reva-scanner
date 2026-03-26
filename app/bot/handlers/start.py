@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime as _dt
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
 
 from aiogram import Router
 from aiogram.filters import CommandStart, Command
@@ -92,12 +92,26 @@ _ABOUT_METHOD_TEXT = """👁 <b>Глаз Бога — о методе и соз�
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) -> None:
+    # Пользователи с бесплатным доступом на 6 месяцев (username → месяцев)
+    _FREE_ACCESS_USERS = {
+        "yakushentsiya": 6,
+    }
+
     user_service = UserService(session)
     user, created = await user_service.get_or_create(
         telegram_id=message.from_user.id,
         username=message.from_user.username,
         full_name=message.from_user.full_name,
     )
+
+    # Автовыдача подписки при первом /start
+    uname = (message.from_user.username or "").lower()
+    if uname in _FREE_ACCESS_USERS:
+        months = _FREE_ACCESS_USERS[uname]
+        now = _dt.now(_tz.utc)
+        if user.subscription_until is None or user.subscription_until < now:
+            user.subscription_until = now + _td(days=30 * months)
+            await session.commit()
 
     scan_service = ScanService(session)
     incomplete_scan = await scan_service.get_incomplete_scan(user.id)

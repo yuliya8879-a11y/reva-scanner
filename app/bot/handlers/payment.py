@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -170,9 +170,15 @@ async def handle_buy_callback(
         product_type=scan_type,
     )
 
+    # Проверка активной подписки — пропускаем оплату
+    has_subscription = (
+        user.subscription_until is not None
+        and user.subscription_until > datetime.now(timezone.utc)
+    )
+
     # Тестовый режим для админа — пропускаем оплату и опросник
     is_admin = settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id
-    if is_admin:
+    if is_admin or has_subscription:
         await payment_service.confirm_payment(
             telegram_charge_id="test_free_access",
             scan_id=scan.id,
