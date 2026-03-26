@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -10,6 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.bot.router import main_router
+from app.bot.tasks import run_follow_up_loop
 from app.config import settings
 from app.database import get_db_session
 
@@ -41,6 +43,10 @@ async def on_startup() -> None:
         logger.info("Webhook set: %s", settings.webhook_url)
     else:
         logger.info("Webhook already set: %s", settings.webhook_url)
+
+    # Start background follow-up loop
+    asyncio.create_task(run_follow_up_loop(bot))
+    logger.info("Follow-up background task scheduled")
 
 
 @app.on_event("shutdown")

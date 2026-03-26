@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     webhook_base_url: str = "https://your-service.railway.app"
     database_url: str
     anthropic_api_key: str = ""
+    admin_telegram_id: int = 0
 
     @property
     def database_url_async(self) -> str:

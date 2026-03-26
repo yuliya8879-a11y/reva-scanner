@@ -1,10 +1,10 @@
-aiogram==3.26.0
-fastapi==0.135.1
-uvicorn[standard]==0.42.0
-sqlalchemy[asyncio]==2.0.48
+aiogram==3.22.0
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+sqlalchemy[asyncio]==2.0.36
 asyncpg==0.31.0
-alembic==1.18.4
-pydantic-settings==2.13.1
+alembic==1.14.0
+pydantic-settings==2.11.0
 python-dotenv
 httpx
 pytest

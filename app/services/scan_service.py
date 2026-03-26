@@ -136,6 +136,16 @@ class ScanService:
         )
         return result.scalar_one_or_none()
 
+    async def has_completed_scan(self, user_id: int) -> bool:
+        """Return True if user already has at least one completed scan."""
+        result = await self.session.execute(
+            select(Scan).where(
+                Scan.user_id == user_id,
+                Scan.status == ScanStatus.completed.value,
+            ).limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
     async def complete_questionnaire(self, scan_id: int) -> Scan:
         """Mark all questions as answered by setting status=questionnaire_complete.
 
