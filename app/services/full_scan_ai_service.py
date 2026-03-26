@@ -512,10 +512,7 @@ def _build_user_prompt(
 
     if scan_type == "personal":
         lines += [
-            f"Суперсила: {get('superpower')}",
-            f"Стиль решений: {get('decision_style')}",
-            f"Цель на год: {get('year_goal')}",
-            f"Текущая ситуация: {get('current_situation')}",
+            f"Запрос (что хочет понять/получить от разбора): {get('scan_request')}",
         ]
     else:  # business
         lines += [

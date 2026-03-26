@@ -28,19 +28,46 @@ class QuestionDef:
 
 
 # ---------------------------------------------------------------------------
-# PERSONAL QUESTIONS — 15 total
+# PERSONAL QUESTIONS — 2 вопроса: дата рождения + запрос
 # ---------------------------------------------------------------------------
 
 PERSONAL_QUESTIONS: list[QuestionDef] = [
     # Q1 (index 0)
     QuestionDef(
         key="birth_date",
-        text="Введите вашу дату рождения в формате ДД.ММ.ГГГГ",
+        text="Введи дату рождения\n\nФормат: ДД.ММ.ГГГГ\nНапример: 15.05.1990",
         input_type="text",
         options=None,
         required=True,
     ),
     # Q2 (index 1)
+    QuestionDef(
+        key="scan_request",
+        text=(
+            "Напиши свой запрос.\n\n"
+            "Что хочешь понять, увидеть или получить от этого разбора?\n"
+            "Опиши ситуацию и на что направить взгляд сканера."
+        ),
+        input_type="text",
+        options=None,
+        required=True,
+        max_length=2000,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# BUSINESS BASE QUESTIONS — 10 общих вопросов (только для бизнес-скана)
+# ---------------------------------------------------------------------------
+
+_BUSINESS_BASE_QUESTIONS: list[QuestionDef] = [
+    QuestionDef(
+        key="birth_date",
+        text="Введи дату рождения\n\nФормат: ДД.ММ.ГГГГ\nНапример: 15.05.1990",
+        input_type="text",
+        options=None,
+        required=True,
+    ),
     QuestionDef(
         key="name",
         text="Ваше имя / как вас зовут?",
@@ -48,7 +75,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         options=None,
         required=True,
     ),
-    # Q3 (index 2)
     QuestionDef(
         key="business_area",
         text="Ваша сфера деятельности?",
@@ -63,7 +89,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q4 (index 3)
     QuestionDef(
         key="business_age",
         text="Сколько лет вы в бизнесе?",
@@ -76,7 +101,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q5 (index 4)
     QuestionDef(
         key="role",
         text="Ваша главная роль?",
@@ -89,7 +113,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q6 (index 5)
     QuestionDef(
         key="team_size",
         text="Сколько человек в команде?",
@@ -102,7 +125,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q7 (index 6)
     QuestionDef(
         key="client_source",
         text="Ваш главный источник клиентов?",
@@ -116,7 +138,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q8 (index 7)
     QuestionDef(
         key="avg_check",
         text="Ваш средний чек?",
@@ -129,7 +150,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q9 (index 8)
     QuestionDef(
         key="main_pain",
         text="Ваша главная боль сейчас?",
@@ -143,7 +163,6 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q10 (index 9)
     QuestionDef(
         key="growth_blocker",
         text="Что мешает расти?",
@@ -156,74 +175,16 @@ PERSONAL_QUESTIONS: list[QuestionDef] = [
         ],
         required=True,
     ),
-    # Q11 (index 10)
-    QuestionDef(
-        key="superpower",
-        text="Ваша суперсила в бизнесе?",
-        input_type="keyboard",
-        options=[
-            ("Идеи", "ideas"),
-            ("Продажи", "sales"),
-            ("Команда", "team"),
-            ("Продукт", "product"),
-            ("Связи", "connections"),
-        ],
-        required=True,
-    ),
-    # Q12 (index 11)
-    QuestionDef(
-        key="decision_style",
-        text="Как принимаете решения?",
-        input_type="keyboard",
-        options=[
-            ("Интуиция", "intuition"),
-            ("Данные", "data"),
-            ("Советники", "advisors"),
-            ("Медленно", "slow"),
-        ],
-        required=True,
-    ),
-    # Q13 (index 12)
-    QuestionDef(
-        key="year_goal",
-        text="Ваша цель на год?",
-        input_type="keyboard",
-        options=[
-            ("Удвоить доход", "double_income"),
-            ("Выйти на новый рынок", "new_market"),
-            ("Систематизировать", "systematize"),
-            ("Выйти из операционки", "exit_ops"),
-        ],
-        required=True,
-    ),
-    # Q14 (index 13)
-    QuestionDef(
-        key="current_situation",
-        text="Опишите текущую ситуацию (до 1000 символов)",
-        input_type="text",
-        options=None,
-        required=False,
-        max_length=1000,
-    ),
-    # Q15 (index 14)
-    QuestionDef(
-        key="social_url",
-        text="Ссылка на соцсеть или сайт",
-        input_type="text",
-        options=None,
-        required=False,
-    ),
 ]
 
 
 # ---------------------------------------------------------------------------
-# BUSINESS QUESTIONS — 12 total
-# Q1-Q10 identical to PERSONAL Q1-Q10
+# BUSINESS QUESTIONS — 15 total
 # ---------------------------------------------------------------------------
 
 BUSINESS_QUESTIONS: list[QuestionDef] = [
-    # Q1-Q10: reuse personal definitions (same objects, same data)
-    *PERSONAL_QUESTIONS[:10],
+    # Q1-Q10: базовые вопросы бизнес-скана
+    *_BUSINESS_BASE_QUESTIONS,
     # Q11 (index 10)
     QuestionDef(
         key="product_description",
