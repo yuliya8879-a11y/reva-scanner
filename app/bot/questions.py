@@ -227,16 +227,55 @@ BUSINESS_QUESTIONS: list[QuestionDef] = [
     # Q11 (index 10)
     QuestionDef(
         key="product_description",
-        text="Описание продукта/услуги (до 1000 символов)",
+        text="Опишите ваш продукт или услугу — что именно вы продаёте?",
         input_type="text",
         options=None,
         required=False,
         max_length=1000,
     ),
-    # Q12 (index 11)
+    # Q12 (index 11) — ключевой вопрос для глубины скана
+    QuestionDef(
+        key="current_situation",
+        text=(
+            "Опишите текущую ситуацию подробно.\n\n"
+            "Что происходит в бизнесе прямо сейчас? Деньги, команда, клиенты, "
+            "что тяготит, что не получается изменить?"
+        ),
+        input_type="text",
+        options=None,
+        required=False,
+        max_length=2000,
+    ),
+    # Q13 (index 12)
+    QuestionDef(
+        key="team_conflict",
+        text=(
+            "Есть ли кто-то в команде или окружении, кто создаёт напряжение, "
+            "конфликт или утечку энергии?\n\n"
+            "Опишите ситуацию (можно без имён, или с именами — как удобно)."
+        ),
+        input_type="text",
+        options=None,
+        required=False,
+        max_length=1500,
+    ),
+    # Q14 (index 13)
+    QuestionDef(
+        key="scan_request",
+        text=(
+            "Ваш запрос на сканирование.\n\n"
+            "Что хотите понять или получить от этого разбора? "
+            "На что направить взгляд сканера?"
+        ),
+        input_type="text",
+        options=None,
+        required=False,
+        max_length=1000,
+    ),
+    # Q15 (index 14)
     QuestionDef(
         key="social_url",
-        text="Ссылка на сайт или соцсеть",
+        text="Ссылка на сайт или соцсеть (если есть)",
         input_type="text",
         options=None,
         required=False,

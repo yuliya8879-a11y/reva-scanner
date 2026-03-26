@@ -29,8 +29,14 @@ from aiogram.types import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.bot.handlers.mini_scan import parse_birth_date
 from app.bot.questions import QuestionDef, get_questions_for_type, get_total_questions
+from datetime import datetime as _dt
+
+
+def parse_birth_date(text: str):
+    return _dt.strptime(text.strip(), "%d.%m.%Y").date()
+from aiogram.filters import StateFilter
+
 from app.bot.states import FullScanStates
 from app.models.scan import ScanStatus
 from app.services.full_scan_ai_service import BLOCK_KEYS, FullScanAIService
@@ -40,12 +46,12 @@ from app.services.user_service import UserService
 logger = logging.getLogger(__name__)
 
 _BLOCK_LABELS = {
-    "архитектура": "Архитектура",
-    "слепые_зоны": "Слепые зоны",
-    "энергетические_блоки": "Энергетические блоки owner'а",
-    "команда": "Команда",
-    "деньги": "Деньги",
-    "рекомендации": "Рекомендации",
+    "архитектура": "👤 Состояние владельца",
+    "слепые_зоны": "🔍 Поломка — что мешает",
+    "энергетические_блоки": "🌀 Глубина — родовое и скрытое",
+    "команда": "🛠 Инструменты и команда",
+    "деньги": "💰 Деньги",
+    "рекомендации": "🎯 Вектор и послание",
 }
 
 router = Router(name="full_scan")
@@ -111,9 +117,14 @@ async def generate_and_deliver_report(
         logger.exception("AI generation failed for scan_id=%s", scan_id)
         scan.status = ScanStatus.failed.value
         await session.commit()
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         await bot.send_message(
             chat_id,
-            "Произошла ошибка при генерации отчёта. Пожалуйста, попробуйте позже или обратитесь в поддержку.",
+            "Произошла ошибка при генерации отчёта.\n\n"
+            "Нажми «Перезапустить бота» и попробуй снова:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
+            ]),
         )
         return
 
@@ -141,6 +152,22 @@ async def generate_and_deliver_report(
             f"*{label}*\n\n{content}",
             parse_mode="Markdown",
         )
+
+    # Soft closing — questions, personal session, review
+    await bot.send_message(
+        chat_id,
+        "Это твой разбор.\n\n"
+        "Пусть осядет.\n\n"
+        "Если что-то отозвалось — или хочешь разобрать глубже — "
+        "напиши мне лично. Я отвечаю.",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Есть вопрос по разбору", url="https://t.me/Reva_Yulya6")],
+                [InlineKeyboardButton(text="🔮 Хочу личную сессию с Юлией", callback_data="request_session")],
+                [InlineKeyboardButton(text="⭐ Оставить отзыв", url="https://t.me/Reva_mentor")],
+            ]
+        ),
+    )
 
 
 async def _send_question(
@@ -214,17 +241,53 @@ async def start_questionnaire_after_payment(
     scan_type: str,
     state: FSMContext,
     session: AsyncSession,
+    telegram_first_name: str = "",
 ) -> None:
     """Start the full scan questionnaire after payment is confirmed.
 
-    Called by app.bot.handlers.payment.handle_successful_payment.
-    Resets FSM state to first unanswered question (or question 0 if scan is fresh).
+    Pre-fills birth_date and name from user profile so those questions are skipped
+    if the data is already known from a previous session.
     """
     scan_service = ScanService(session)
     scan = await scan_service.get_scan(scan_id)
-    current_index = len(scan.answers or {}) if scan is not None else 0
+    existing_answers = dict(scan.answers or {}) if scan is not None else {}
+
+    # Pre-fill birth_date from user profile (if not already answered)
+    if "birth_date" not in existing_answers and scan is not None:
+        from app.models.user import User as UserModel
+        user = await session.get(UserModel, scan.user_id)
+        if user is not None and user.birth_date:
+            await scan_service.save_answer(scan_id, "birth_date", user.birth_date.isoformat())
+            existing_answers["birth_date"] = user.birth_date.isoformat()
+
+    # Pre-fill name from Telegram profile (if not already answered)
+    if "name" not in existing_answers and telegram_first_name:
+        await scan_service.save_answer(scan_id, "name", telegram_first_name)
+        existing_answers["name"] = telegram_first_name
+
     total = get_total_questions(scan_type)
     questions = get_questions_for_type(scan_type)
+
+    # Ищем первый вопрос, на который ещё нет ответа.
+    # НЕ используем len(existing_answers) — при пред-заполнении name но не birth_date
+    # len=1 прыгает на индекс 1, пропуская birth_date (индекс 0).
+    current_index = total  # по умолчанию — всё заполнено
+    for i, q in enumerate(questions):
+        if q.key not in existing_answers:
+            current_index = i
+            break
+
+    if current_index >= total:
+        # Все вопросы уже заполнены — сразу генерируем
+        await state.update_data(
+            scan_id=scan_id,
+            user_id=scan.user_id if scan is not None else 0,
+            scan_type=scan_type,
+            current_index=current_index,
+        )
+        await state.clear()
+        await generate_and_deliver_report(bot, chat_id, scan_id, scan_type, session)
+        return
 
     await state.update_data(
         scan_id=scan_id,
@@ -244,7 +307,7 @@ async def start_questionnaire_after_payment(
 # ---------------------------------------------------------------------------
 
 
-@router.callback_query(FullScanStates, lambda c: c.data.startswith("fq:"))
+@router.callback_query(StateFilter(FullScanStates), lambda c: c.data.startswith("fq:"))
 async def handle_keyboard_answer(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
@@ -283,7 +346,7 @@ async def handle_keyboard_answer(
 # ---------------------------------------------------------------------------
 
 
-@router.callback_query(FullScanStates, lambda c: c.data.startswith("fq_skip:"))
+@router.callback_query(StateFilter(FullScanStates), lambda c: c.data.startswith("fq_skip:"))
 async def handle_skip_answer(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
@@ -315,7 +378,7 @@ async def handle_skip_answer(
 # ---------------------------------------------------------------------------
 
 
-@router.message(FullScanStates)
+@router.message(StateFilter(FullScanStates))
 async def handle_text_answer(
     message: Message, state: FSMContext, session: AsyncSession
 ) -> None:
@@ -394,8 +457,17 @@ async def handle_resume_scan(
         await callback.answer()
         return
 
-    current_index = len(scan.answers or {})
     scan_type = scan.scan_type
+    existing_answers = scan.answers or {}
+    questions = get_questions_for_type(scan_type)
+    total = get_total_questions(scan_type)
+
+    # Найти первый незаполненный вопрос
+    current_index = total
+    for i, q in enumerate(questions):
+        if q.key not in existing_answers:
+            current_index = i
+            break
 
     await state.update_data(
         scan_id=scan.id,
@@ -407,8 +479,6 @@ async def handle_resume_scan(
     fsm_state = getattr(FullScanStates, f"q{current_index}")
     await state.set_state(fsm_state)
 
-    total = get_total_questions(scan_type)
-    questions = get_questions_for_type(scan_type)
     question = questions[current_index]
 
     await _send_question(callback.message.bot, callback.message.chat.id, question, current_index, total)

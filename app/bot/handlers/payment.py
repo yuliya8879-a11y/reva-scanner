@@ -4,16 +4,121 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import date
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aiogram import Bot
+
+from app.config import settings
 from app.models.scan import ScanStatus
+from app.services.full_scan_ai_service import BLOCK_KEYS, FullScanAIService
 from app.services.payment_service import PaymentService
 from app.services.scan_service import ScanService
 from app.services.user_service import UserService
+
+_BLOCK_LABELS = {
+    "архитектура": "👤 Состояние владельца",
+    "слепые_зоны": "🔍 Поломка — что мешает",
+    "энергетические_блоки": "🌀 Глубина — родовое и скрытое",
+    "команда": "🛠 Инструменты и команда",
+    "деньги": "💰 Деньги",
+    "рекомендации": "🎯 Вектор и послание",
+}
+
+
+async def _admin_generate_report(
+    bot: Bot,
+    chat_id: int,
+    scan_id: int,
+    scan_type: str,
+    user_name: str,
+    session: AsyncSession,
+) -> None:
+    """Тестовая генерация для админа — полный 6-блочный разбор без опросника."""
+    scanning_msg = await bot.send_message(
+        chat_id,
+        "🔓 Тестовый доступ активирован.\n🔮 Генерирую полный разбор... Это займёт около 30 секунд."
+    )
+    try:
+        # Берём реальную дату рождения из профиля если есть, иначе заглушка
+        from app.models.user import User as UserModel
+        from sqlalchemy import select as sa_select
+        from app.models.scan import Scan as ScanModel
+        scan_row = await session.get(ScanModel, scan_id)
+        real_user = await session.get(UserModel, scan_row.user_id) if scan_row else None
+        birth_date = real_user.birth_date if (real_user and real_user.birth_date) else date(1990, 1, 1)
+        birth_date_note = "" if (real_user and real_user.birth_date) else "\n_(дата рождения не задана — установи через /setbirthdate или пройди полную анкету)_"
+
+        answers = {
+            "name": user_name,
+            "birth_date": birth_date.isoformat(),
+        }
+
+        ai_service = FullScanAIService()
+        report = await ai_service.generate_full_report(answers, birth_date, scan_type)
+
+        scan_service = ScanService(session)
+        await scan_service.update_answers(scan_id, answers)
+        token_usage = report.get("token_usage", {})
+        await scan_service.complete_full_scan(scan_id, report, token_usage)
+
+        await scanning_msg.delete()
+
+        # Нумерология
+        num = report.get("numerology", {})
+        await bot.send_message(
+            chat_id,
+            f"*🔢 Нумерология*\nЧисло души: {num.get('soul_number', '—')}\n"
+            f"Число жизненного пути: {num.get('life_path_number', '—')}"
+            f"{birth_date_note}",
+            parse_mode="Markdown",
+        )
+
+        # 6 блоков — каждый отдельным сообщением
+        for key in BLOCK_KEYS:
+            label = _BLOCK_LABELS[key]
+            content = report.get(key, "недостаточно данных для анализа этого аспекта")
+            await bot.send_message(
+                chat_id,
+                f"*{label}*\n\n{content}",
+                parse_mode="Markdown",
+            )
+
+        # Soft closing
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        await bot.send_message(
+            chat_id,
+            "Это твой разбор.\n\n"
+            "Пусть осядет.\n\n"
+            "Если что-то отозвалось — или хочешь разобрать глубже — "
+            "напиши мне лично. Я отвечаю.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="💬 Есть вопрос по разбору", url="https://t.me/Reva_Yulya6")],
+                    [InlineKeyboardButton(text="🔮 Хочу личную сессию с Юлией", callback_data="request_session")],
+                    [InlineKeyboardButton(text="⭐ Оставить отзыв", url="https://t.me/Reva_mentor")],
+                ]
+            ),
+        )
+
+    except Exception:
+        logger.exception("Admin test report failed for scan_id=%s", scan_id)
+        try:
+            await scanning_msg.delete()
+        except Exception:
+            pass
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        await bot.send_message(
+            chat_id,
+            "Ошибка при генерации разбора.\n\nНажми «Перезапустить бота» и попробуй снова:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
+            ]),
+        )
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +169,24 @@ async def handle_buy_callback(
         amount_stars=stars,
         product_type=scan_type,
     )
+
+    # Тестовый режим для админа — пропускаем оплату и опросник
+    is_admin = settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id
+    if is_admin:
+        await payment_service.confirm_payment(
+            telegram_charge_id="test_free_access",
+            scan_id=scan.id,
+        )
+        await callback.answer()
+        await _admin_generate_report(
+            bot=callback.message.bot,
+            chat_id=callback.message.chat.id,
+            scan_id=scan.id,
+            scan_type=scan_type,
+            user_name=callback.from_user.first_name or callback.from_user.full_name or "",
+            session=session,
+        )
+        return
 
     await callback.message.answer("Сейчас выставим счёт...")
     await callback.message.bot.send_invoice(
@@ -138,4 +261,5 @@ async def handle_successful_payment(
         scan_type=scan.scan_type,
         state=state,
         session=session,
+        telegram_first_name=message.from_user.first_name or "",
     )
