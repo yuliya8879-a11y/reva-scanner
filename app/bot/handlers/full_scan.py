@@ -96,9 +96,24 @@ async def generate_and_deliver_report(
     answers = scan.answers or {}
 
     birth_date_str = answers.get("birth_date", "")
+    birth_date = None
     try:
         birth_date = date.fromisoformat(birth_date_str)
     except (ValueError, TypeError):
+        pass
+
+    if birth_date is None:
+        # Fallback: check user profile
+        from app.models.user import User as UserModel
+        user = await session.get(UserModel, scan.user_id)
+        if user is not None and user.birth_date:
+            birth_date = user.birth_date
+            # Save to scan answers so it's consistent
+            await scan_service.save_answer(scan_id, "birth_date", birth_date.isoformat())
+            scan = await scan_service.get_scan(scan_id)
+            answers = scan.answers or {}
+
+    if birth_date is None:
         logger.error(
             "Missing or invalid birth_date for scan_id=%s: %r", scan_id, birth_date_str
         )
