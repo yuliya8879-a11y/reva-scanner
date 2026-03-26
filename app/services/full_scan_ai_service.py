@@ -499,7 +499,7 @@ def _build_user_prompt(
         "",
         "Ответы на анкету:",
         f"Дата рождения: {answers.get('birth_date', 'не указано')}",
-        f"Имя: {get('name')}",
+        f"Имя: {answers.get('name') or answers.get('user_name') or 'не указано'}",
         f"Сфера: {get('business_area')}",
         f"Возраст бизнеса: {get('business_age')}",
         f"Роль: {get('role')}",
