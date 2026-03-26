@@ -24,8 +24,8 @@ def _main_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="🔮 Личный разбор 3500⭐", callback_data="scan_type:personal"),
-                InlineKeyboardButton(text="💼 Бизнес-разбор 7000⭐", callback_data="scan_type:business"),
+                InlineKeyboardButton(text="🔮 Личный разбор", callback_data="buy:personal"),
+                InlineKeyboardButton(text="💼 Бизнес-разбор", callback_data="buy:business"),
             ],
             [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
             [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],

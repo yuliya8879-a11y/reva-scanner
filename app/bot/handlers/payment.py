@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, LabeledPrice, Message, PreCheckoutQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aiogram import Bot
@@ -124,8 +124,11 @@ logger = logging.getLogger(__name__)
 
 router = Router(name="payment")
 
-STARS_PRICE_PERSONAL = int(os.getenv("STARS_PRICE", "75"))
-STARS_PRICE_BUSINESS = STARS_PRICE_PERSONAL * 2  # 150 by default
+STARS_PRICE_PERSONAL = int(os.getenv("STARS_PRICE_PERSONAL", "3500"))
+STARS_PRICE_BUSINESS = int(os.getenv("STARS_PRICE_BUSINESS", "7000"))
+
+# Оплата временно приостановлена — True пока не подключён банк
+PAYMENT_PAUSED = os.getenv("PAYMENT_PAUSED", "true").lower() == "true"
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +143,20 @@ async def handle_buy_callback(
     """Intercept buy callbacks from upsell, create Payment row, send Stars invoice."""
     scan_type = callback.data.split(":")[1]  # "personal" or "business"
     stars = STARS_PRICE_PERSONAL if scan_type == "personal" else STARS_PRICE_BUSINESS
+
+    # Оплата приостановлена (ожидает подключения банка)
+    if PAYMENT_PAUSED:
+        await callback.answer()
+        await callback.message.answer(
+            "⏳ <b>Оплата временно недоступна.</b>\n\n"
+            "Мы настраиваем платёжную систему — совсем скоро всё заработает.\n\n"
+            "Хочешь — напиши Юлии лично, договоримся:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")
+            ]])
+        )
+        return
 
     user_service = UserService(session)
     user, _ = await user_service.get_or_create(
