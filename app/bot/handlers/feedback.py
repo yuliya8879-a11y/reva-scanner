@@ -1,6 +1,7 @@
 """Feedback & help handler — catches free-text messages outside FSM.
 
-Receives user reviews and help requests, forwards them to Yulia.
+ALL messages are saved to feedback_messages table in DB — never lost.
+Forwards to Yulia in Telegram in real time.
 Must be registered LAST in the router chain so FSM handlers take priority.
 """
 
@@ -10,23 +11,53 @@ import logging
 
 from aiogram import Router
 from aiogram.filters import StateFilter
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import (
-    CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = Router(name="feedback")
 
+REVIEW_WORDS = [
+    "спасибо", "thank", "понравилось", "помогло", "ясность", "понял",
+    "узнал", "класс", "круто", "огонь", "хорошо", "отзыв", "фидбек",
+    "feedback", "почувствовал", "зашло", "точно", "попало", "разбор",
+    "интересно", "помог", "помогла", "впечатл", "сильно", "мощно",
+    "работает", "точное", "увидел", "увидела", "поняла", "получилось",
+]
+
+
+async def _save_to_db(session: AsyncSession, message: Message, tag: str) -> None:
+    """Сохраняет сообщение в таблицу feedback_messages — никогда не теряется."""
+    user = message.from_user
+    try:
+        await session.execute(
+            text("""
+                INSERT INTO feedback_messages (telegram_id, username, full_name, text, tag)
+                VALUES (:telegram_id, :username, :full_name, :text, :tag)
+            """),
+            {
+                "telegram_id": user.id,
+                "username": user.username,
+                "full_name": user.full_name or user.first_name,
+                "text": message.text or "(нет текста)",
+                "tag": tag,
+            },
+        )
+        await session.commit()
+    except Exception:
+        logger.exception("Не удалось сохранить feedback от user_id=%s", user.id)
+
 
 async def _forward_to_admin(message: Message, tag: str) -> None:
-    """Пересылает сообщение пользователя Юлии с тегом."""
+    """Пересылает сообщение пользователя Юлии в Telegram."""
     if not settings.admin_telegram_id:
         return
     user = message.from_user
@@ -44,59 +75,26 @@ async def _forward_to_admin(message: Message, tag: str) -> None:
         logger.warning("Не удалось переслать сообщение админу от user_id=%s", user.id)
 
 
-# ─── Обработчик кнопки "Помощь / сообщить об ошибке" ─────────────────────────
-
-@router.callback_query(lambda c: c.data == "help_request")
-async def handle_help_request(callback: CallbackQuery, state: FSMContext) -> None:
-    await callback.answer()
-    await state.set_state("awaiting_help_text")
-    await callback.message.answer(
-        "Напиши что произошло — я передам Юлии.\n\n"
-        "Опиши кратко: что ты делал(а), что пошло не так."
-    )
-
-
-# ─── Входящий текст в состоянии ожидания помощи ──────────────────────────────
-
-@router.message(StateFilter("awaiting_help_text"))
-async def handle_help_text(message: Message, state: FSMContext) -> None:
-    await _forward_to_admin(message, "🆘 <b>Запрос помощи / ошибка:</b>")
-    await state.clear()
-    await message.answer(
-        "Юлия получила твоё сообщение и разберётся. 🤍\n\n"
-        "Обычно отвечаем в течение нескольких часов.",
-        reply_markup=InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text="💬 Написать Юлии напрямую", url="https://t.me/Reva_Yulya6")],
-                [InlineKeyboardButton(text="← Главное меню", callback_data="back_to_menu")],
-            ]
-        ),
-    )
-
-
-# ─── Catch-all: любое сообщение вне FSM → принимаем как отзыв ────────────────
+# ─── Catch-all: любое сообщение вне FSM → сохранить + переслать ──────────────
 
 @router.message(StateFilter(default_state))
-async def handle_free_text(message: Message) -> None:
-    """Принимает любое сообщение вне FSM — скорее всего отзыв или вопрос."""
+async def handle_free_text(message: Message, session: AsyncSession) -> None:
+    """Принимает любое сообщение вне FSM. Сохраняет в БД. Пересылает Юлии."""
     if not message.text:
         return
 
     text_lower = message.text.lower()
+    is_review = any(w in text_lower for w in REVIEW_WORDS)
+    tag = "review" if is_review else "message"
 
-    # Если похоже на отзыв — вперёд Юлии + тёплое подтверждение
-    review_words = [
-        "спасибо", "thank", "понравилось", "помогло", "ясность", "понял",
-        "узнал", "класс", "круто", "огонь", "хорошо", "отзыв", "фидбек",
-        "feedback", "почувствовал", "зашло", "точно", "попало", "разбор",
-        "интересно", "помог", "помогла",
-    ]
+    # Сохраняем ВСЕГДА — даже если пересылка в Telegram упадёт
+    await _save_to_db(session, message, tag)
+    await _forward_to_admin(message, "⭐ <b>Отзыв:</b>" if is_review else "💬 <b>Сообщение:</b>")
 
-    if any(w in text_lower for w in review_words):
-        await _forward_to_admin(message, "⭐ <b>Отзыв пользователя:</b>")
+    if is_review:
         await message.answer(
             "Спасибо! Юлия это получила. 🤍\n\n"
-            "Если хочешь пройти следующее сканирование — нажми /start",
+            "Если хочешь пройти следующее сканирование — /start",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="🔮 Хочу личную сессию с Юлией", callback_data="request_session")],
@@ -105,8 +103,6 @@ async def handle_free_text(message: Message) -> None:
             ),
         )
     else:
-        # Любое другое сообщение — переслать и дать меню
-        await _forward_to_admin(message, "💬 <b>Сообщение от пользователя:</b>")
         await message.answer(
             "Получила! Если это вопрос — Юлия ответит.\n\n"
             "Если нужна помощь прямо сейчас:",

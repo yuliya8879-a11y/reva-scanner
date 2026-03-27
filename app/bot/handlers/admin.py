@@ -269,6 +269,45 @@ async def handle_help_description(
     )
 
 
+# ── /reviews ──────────────────────────────────────────────────────────────────
+
+@router.message(Command("reviews"))
+async def cmd_reviews(message: Message, session: AsyncSession) -> None:
+    """Показать последние отзывы и сообщения пользователей из БД."""
+    if not _is_admin(message):
+        return
+
+    from sqlalchemy import text as sa_text
+    result = await session.execute(sa_text("""
+        SELECT telegram_id, username, full_name, text, tag, created_at
+        FROM feedback_messages
+        ORDER BY created_at DESC
+        LIMIT 30
+    """))
+    rows = result.fetchall()
+
+    if not rows:
+        await message.answer("📭 Отзывов пока нет.")
+        return
+
+    tag_emoji = {"review": "⭐", "help": "🆘", "message": "💬"}
+    lines = [f"📋 <b>Отзывы и сообщения</b> (последние {len(rows)}):\n"]
+    for tg_id, username, full_name, text, tag, created_at in rows:
+        name = full_name or username or str(tg_id)
+        uname = f"@{username}" if username else f"id:{tg_id}"
+        emoji = tag_emoji.get(tag, "💬")
+        date_str = created_at.strftime("%d.%m %H:%M") if created_at else ""
+        lines.append(
+            f"{emoji} <b>{name}</b> ({uname}) — {date_str}\n"
+            f"   {text[:200]}\n"
+        )
+
+    full_text = "\n".join(lines)
+    chunks = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
+    for chunk in chunks:
+        await message.answer(chunk, parse_mode="HTML")
+
+
 # ── /broadcast ────────────────────────────────────────────────────────────────
 
 class BroadcastStates(StatesGroup):
