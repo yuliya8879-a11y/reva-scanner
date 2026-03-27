@@ -341,6 +341,12 @@ async def handle_keyboard_answer(
     scan_type: str = data["scan_type"]
     current_index: int = data["current_index"]
 
+    # Guard against stale keyboard buttons from previous questionnaire sessions
+    questions = get_questions_for_type(scan_type)
+    if current_index >= len(questions) or key != questions[current_index].key:
+        await callback.answer("Устаревшая кнопка — пропускаю", show_alert=False)
+        return
+
     scan_service = ScanService(session)
     await scan_service.save_answer(scan_id, key, value)
 
@@ -372,6 +378,12 @@ async def handle_skip_answer(
     scan_id: int = data["scan_id"]
     scan_type: str = data["scan_type"]
     current_index: int = data["current_index"]
+
+    # Guard against stale skip buttons from previous questionnaire sessions
+    questions = get_questions_for_type(scan_type)
+    if current_index >= len(questions) or key != questions[current_index].key:
+        await callback.answer("Устаревшая кнопка — пропускаю", show_alert=False)
+        return
 
     scan_service = ScanService(session)
     await scan_service.save_answer(scan_id, key, "")
