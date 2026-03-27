@@ -20,13 +20,20 @@ _SCAN_TYPE_LABELS = {
 }
 
 
-def _main_keyboard() -> InlineKeyboardMarkup:
+def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
+    if has_subscription:
+        scan_buttons = [
+            InlineKeyboardButton(text="🔮 Новое личное сканирование", callback_data="buy:personal"),
+            InlineKeyboardButton(text="💼 Новое бизнес-сканирование", callback_data="buy:business"),
+        ]
+    else:
+        scan_buttons = [
+            InlineKeyboardButton(text="🔮 Личный разбор", callback_data="buy:personal"),
+            InlineKeyboardButton(text="💼 Бизнес-разбор", callback_data="buy:business"),
+        ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🔮 Личный разбор", callback_data="buy:personal"),
-                InlineKeyboardButton(text="💼 Бизнес-разбор", callback_data="buy:business"),
-            ],
+            scan_buttons,
             [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
             [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
             [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
@@ -139,18 +146,27 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
         text = (
             "👁 <b>Глаз Бога</b>\n\n"
             f"Добрый день, {name}.\n\n"
-            "Я — AI-сканер Юлии Ревы.\n"
-            "Работаю не поверхностно: нахожу корень, системную ошибку, даю вектор.\n\n"
+            "Это не гадание. Не предположение «попадёт — не попадёт».\n"
+            "Это <b>точное сканирование</b> вас, вашего состояния и ваших желаний — "
+            "отточенное до идеала.\n\n"
+            "Я — AI-сканер Юлии Ревы. Нахожу корень, системную ошибку, даю вектор.\n\n"
             "Начните с <b>бесплатного мини-скана</b> — первый разбор полный и без вопросов."
         )
     else:
         text = (
             "👁 <b>Глаз Бога</b>\n\n"
             f"С возвращением, {name}.\n\n"
+            "Это не гадание. Не предположение «попадёт — не попадёт».\n"
+            "Это <b>точное сканирование</b> вас, вашего состояния и ваших желаний — "
+            "отточенное до идеала.\n\n"
             "Выберите формат:"
         )
 
-    await message.answer(text, parse_mode="HTML", reply_markup=_main_keyboard())
+    has_subscription = (
+        user.subscription_until is not None
+        and user.subscription_until > _dt.now(_tz.utc)
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=_main_keyboard(has_subscription))
 
 
 @router.callback_query(lambda c: c.data == "restart_bot")
