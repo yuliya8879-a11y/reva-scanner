@@ -201,6 +201,30 @@ class ScanService:
         scan = await self._get_or_raise(scan_id)
         return len(scan.answers) if scan.answers is not None else 0
 
+    async def get_user_completed_scans(self, user_id: int, limit: int = 5) -> list[Scan]:
+        """Return the last N completed scans for a user, newest first."""
+        result = await self.session.execute(
+            select(Scan)
+            .where(
+                Scan.user_id == user_id,
+                Scan.status == ScanStatus.completed.value,
+            )
+            .order_by(Scan.created_at.desc())
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_completed_scans(self, user_id: int) -> int:
+        """Return total number of completed scans for a user."""
+        from sqlalchemy import func as sa_func
+        result = await self.session.execute(
+            select(sa_func.count()).select_from(Scan).where(
+                Scan.user_id == user_id,
+                Scan.status == ScanStatus.completed.value,
+            )
+        )
+        return result.scalar_one() or 0
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

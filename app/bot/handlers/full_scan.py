@@ -496,6 +496,21 @@ async def handle_resume_scan(
             current_index = i
             break
 
+    if current_index >= total:
+        # Все вопросы заполнены, но AI не успел/упал — запускаем генерацию
+        await state.update_data(
+            scan_id=scan.id,
+            user_id=scan.user_id,
+            scan_type=scan_type,
+            current_index=current_index,
+        )
+        await state.clear()
+        await callback.answer()
+        await generate_and_deliver_report(
+            callback.message.bot, callback.message.chat.id, scan.id, scan_type, session
+        )
+        return
+
     await state.update_data(
         scan_id=scan.id,
         user_id=scan.user_id,

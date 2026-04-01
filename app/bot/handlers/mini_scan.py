@@ -28,10 +28,10 @@ router = Router(name="mini_scan")
 def _post_scan_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
+            [InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
             [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
-            [InlineKeyboardButton(text="💎 Личная консультация", url="https://t.me/Reva_Yulya6")],
-            [InlineKeyboardButton(text="🔮 Хочу полный разбор 3500⭐", callback_data="buy:personal")],
-            [InlineKeyboardButton(text="💼 Бизнес-разбор 7000⭐", callback_data="buy:business")],
+            [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
         ]
     )
 
@@ -221,7 +221,8 @@ async def handle_mini_birth_date(
         username=message.from_user.username,
         full_name=message.from_user.full_name,
     )
-    user.birth_date = text
+    from datetime import datetime as _datetime
+    user.birth_date = _datetime.strptime(text, "%d.%m.%Y").date()
     await session.commit()
 
     await log_event(session, message.from_user, "mini_date_entered", detail=text)

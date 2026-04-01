@@ -43,14 +43,17 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🔮 Новое личное сканирование", callback_data="buy:personal"),
             InlineKeyboardButton(text="💼 Новое бизнес-сканирование", callback_data="buy:business"),
         ]
+        cabinet_row = [InlineKeyboardButton(text="🗄 Мой кабинет", callback_data="my_cabinet")]
     else:
         scan_buttons = [
             InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal"),
             InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business"),
         ]
+        cabinet_row = [InlineKeyboardButton(text="🗄 Мой кабинет 🔒", callback_data="my_cabinet")]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             scan_buttons,
+            cabinet_row,
             [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
             [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
             [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
@@ -277,4 +280,81 @@ async def cmd_set_birth_date(message: Message, session: AsyncSession) -> None:
     await message.answer(
         f"✅ Дата рождения сохранена: {birth_date.strftime('%d.%m.%Y')}\n"
         "Теперь бот будет использовать её для нумерологии и не будет спрашивать снова."
+    )
+
+
+@router.callback_query(lambda c: c.data == "my_cabinet")
+async def handle_my_cabinet(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    await callback.answer()
+
+    user_service = UserService(session)
+    user, _ = await user_service.get_or_create(
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name,
+    )
+
+    now = _dt.now(_tz.utc)
+    has_sub = user.subscription_until is not None and user.subscription_until > now
+
+    if not has_sub:
+        await callback.message.answer(
+            "🗄 <b>Мой кабинет</b>\n\n"
+            "🔒 Кабинет доступен после оплаты разбора.\n\n"
+            "В кабинете вы найдёте:\n"
+            "· Все ваши сканы и разборы\n"
+            "· Дату следующего сеанса\n"
+            "· Историю вашей работы с ботом\n\n"
+            "Оформите личный или бизнес разбор — и кабинет откроется:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
+                    [InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
+                    [InlineKeyboardButton(text="← Назад", callback_data="back_to_menu")],
+                ]
+            ),
+        )
+        return
+
+    scan_service = ScanService(session)
+    total = await scan_service.count_completed_scans(user.id)
+    recent = await scan_service.get_user_completed_scans(user.id, limit=3)
+
+    sub_until = user.subscription_until.strftime("%d.%m.%Y") if user.subscription_until else "—"
+    days_left = (user.subscription_until - now).days if user.subscription_until else 0
+
+    _type_labels = {"mini": "Мини-скан", "personal": "Личный разбор", "business": "Бизнес-разбор"}
+
+    scans_text = ""
+    for s in recent:
+        label = _type_labels.get(s.scan_type, s.scan_type)
+        date = s.created_at.strftime("%d.%m.%Y") if s.created_at else "—"
+        scans_text += f"  · {label} — {date}\n"
+
+    if not scans_text:
+        scans_text = "  (сканов пока нет)\n"
+
+    text = (
+        "🗄 <b>Мой кабинет</b>\n\n"
+        f"✅ Подписка активна до: <b>{sub_until}</b> ({days_left} дн.)\n\n"
+        f"📊 Всего завершённых разборов: <b>{total}</b>\n\n"
+        f"🕐 Последние:\n{scans_text}\n"
+        "Хотите новый разбор?"
+    )
+
+    await callback.message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🔮 Новый личный", callback_data="buy:personal"),
+                    InlineKeyboardButton(text="💼 Новый бизнес", callback_data="buy:business"),
+                ],
+                [InlineKeyboardButton(text="← Назад в меню", callback_data="back_to_menu")],
+            ]
+        ),
     )
