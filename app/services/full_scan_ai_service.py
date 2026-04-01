@@ -458,11 +458,24 @@ class FullScanAIService:
             raw_text = raw_text.strip()
         try:
             blocks = json.loads(raw_text)
-        except json.JSONDecodeError as exc:
-            logger.error("Non-JSON response (first 500 chars): %r", raw_text[:500])
-            raise ValueError(
-                f"Claude returned non-JSON for full scan report: {raw_text[:200]}"
-            ) from exc
+        except json.JSONDecodeError:
+            # Запасной вариант: ищем первый { ... } в тексте
+            start = raw_text.find("{")
+            end = raw_text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    blocks = json.loads(raw_text[start:end + 1])
+                    logger.warning("JSON extracted via brace-search fallback for scan")
+                except json.JSONDecodeError as exc2:
+                    logger.error("Non-JSON response (first 500 chars): %r", raw_text[:500])
+                    raise ValueError(
+                        f"Claude returned non-JSON for full scan report: {raw_text[:200]}"
+                    ) from exc2
+            else:
+                logger.error("Non-JSON response (first 500 chars): %r", raw_text[:500])
+                raise ValueError(
+                    f"Claude returned non-JSON for full scan report: {raw_text[:200]}"
+                )
 
         return {
             **{
