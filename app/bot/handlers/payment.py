@@ -20,6 +20,8 @@ from app.services.payment_service import PaymentService
 from app.services.scan_service import ScanService
 from app.services.user_service import UserService
 
+logger = logging.getLogger(__name__)
+
 _BLOCK_LABELS = {
     "архитектура": "👤 Состояние владельца",
     "слепые_зоны": "🔍 Поломка — что мешает",
@@ -89,7 +91,6 @@ async def _admin_generate_report(
             )
 
         # Soft closing
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         await bot.send_message(
             chat_id,
             "Это твой разбор.\n\n"
@@ -111,7 +112,6 @@ async def _admin_generate_report(
             await scanning_msg.delete()
         except Exception:
             pass
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         await bot.send_message(
             chat_id,
             "Ошибка при генерации разбора.\n\nНажми «Перезапустить бота» и попробуй снова:",
@@ -119,8 +119,6 @@ async def _admin_generate_report(
                 [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
             ]),
         )
-
-logger = logging.getLogger(__name__)
 
 router = Router(name="payment")
 
