@@ -116,6 +116,20 @@ async def cmd_stats(message: Message, session: AsyncSession) -> None:
 
     total_scans = (mini_total or 0) + (personal_done or 0) + (business_done or 0)
 
+    # Расчёт дохода в рублях (3500 личный / 10000 бизнес)
+    revenue_total = (paid_personal or 0) * 3500 + (paid_business or 0) * 10000
+    revenue_week = 0  # приблизительно — по типам за неделю отдельно не делаем
+    # Пытаемся посчитать доход за неделю по типам
+    paid_personal_week = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "personal", Scan.is_paid.is_(True), Scan.created_at >= week_ago)
+    )
+    paid_business_week = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "business", Scan.is_paid.is_(True), Scan.created_at >= month_ago)
+    )
+    revenue_week = (paid_personal_week or 0) * 3500
+
     await message.answer(
         "📊 <b>ОТЧЁТ — Глаз Бога</b>\n"
         f"<i>{now.strftime('%d.%m.%Y %H:%M')} UTC</i>\n\n"
@@ -132,12 +146,13 @@ async def cmd_stats(message: Message, session: AsyncSession) -> None:
         f"  💼 Бизнес-разборов: <b>{business_done}</b>\n"
         f"  📦 Всего завершено: <b>{total_scans}</b>\n\n"
 
-        "💰 <b>Оплаты</b>\n"
+        "💰 <b>Оплаты и доход</b>\n"
         f"  Всего оплат: <b>{paid_total}</b>\n"
-        f"  Личных платных: <b>{paid_personal}</b>\n"
-        f"  Бизнес платных: <b>{paid_business}</b>\n"
+        f"  Личных (3 500 ₽): <b>{paid_personal}</b>\n"
+        f"  Бизнес (10 000 ₽): <b>{paid_business}</b>\n"
         f"  За 7 дней: <b>{paid_week}</b>\n"
-        f"  За 30 дней: <b>{paid_month}</b>\n\n"
+        f"  За 30 дней: <b>{paid_month}</b>\n"
+        f"  💵 Расчётный доход: <b>{revenue_total:,} ₽</b>\n\n"
 
         "📈 <b>Конверсия</b>\n"
         f"  Мини → платный: <b>{converted}</b> из {len(mini_users)} ({conv_rate}%)\n\n"
