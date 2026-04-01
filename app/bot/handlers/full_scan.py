@@ -132,7 +132,6 @@ async def generate_and_deliver_report(
         logger.exception("AI generation failed for scan_id=%s", scan_id)
         scan.status = ScanStatus.failed.value
         await session.commit()
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         await bot.send_message(
             chat_id,
             "Произошла ошибка при генерации отчёта.\n\n"
