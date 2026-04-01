@@ -1,4 +1,4 @@
-"""Admin commands: /stats, /today, /broadcast — only for ADMIN_TELEGRAM_ID."""
+"""Admin commands: /stats, /today, /broadcast, /api — only for ADMIN_TELEGRAM_ID."""
 
 from __future__ import annotations
 
@@ -15,9 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.event import UserEvent
+from app.models.payment import Payment
 from app.models.scan import Scan
 from app.models.user import User
 from app.services.event_service import _EVENT_LABELS
+from app.services.ai_client import get_status as api_get_status, set_active_key
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
@@ -308,6 +310,504 @@ async def cmd_reviews(message: Message, session: AsyncSession) -> None:
         await message.answer(chunk, parse_mode="HTML")
 
 
+# ── /grant ────────────────────────────────────────────────────────────────────
+
+@router.message(Command("grant"))
+async def cmd_grant(message: Message, session: AsyncSession) -> None:
+    """/grant <telegram_id|@username> <personal|business> — выдать доступ пользователю."""
+    if not _is_admin(message):
+        return
+
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select as sa_select
+
+    parts = message.text.strip().split()
+    if len(parts) != 3:
+        await message.answer(
+            "Использование: <code>/grant 123456789 personal</code>\n"
+            "или: <code>/grant @username business</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    _, target, scan_type = parts
+    scan_type = scan_type.lower()
+    if scan_type not in ("personal", "business", "forever"):
+        await message.answer("Тип должен быть <code>personal</code>, <code>business</code> или <code>forever</code>.", parse_mode="HTML")
+        return
+
+    # Ищем пользователя по ID или username
+    if target.startswith("@"):
+        uname = target[1:].lower()
+        result = await session.execute(
+            sa_select(User).where(User.username.ilike(uname))
+        )
+        user = result.scalar_one_or_none()
+    else:
+        try:
+            tg_id = int(target)
+        except ValueError:
+            await message.answer("Неверный ID. Укажи числовой telegram_id или @username.")
+            return
+        result = await session.execute(sa_select(User).where(User.telegram_id == tg_id))
+        user = result.scalar_one_or_none()
+
+    if user is None:
+        await message.answer(f"Пользователь {target} не найден в БД.")
+        return
+
+    # Выдаём доступ
+    now = datetime.now(timezone.utc)
+    if scan_type == "forever":
+        user.subscription_until = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+    else:
+        user.subscription_until = now + timedelta(days=30)
+    await session.commit()
+
+    type_label = "личный разбор" if scan_type == "personal" else ("бизнес-разбор" if scan_type == "business" else "безлимитный доступ")
+    display = f"@{user.username}" if user.username else f"id:{user.telegram_id}"
+
+    await message.answer(
+        f"✅ Доступ выдан: {display}\n"
+        f"Тип: {type_label}\n"
+        f"Действует до: {user.subscription_until.strftime('%d.%m.%Y %H:%M')} UTC"
+    )
+
+    # Уведомить пользователя
+    try:
+        await message.bot.send_message(
+            user.telegram_id,
+            f"✅ <b>Оплата подтверждена!</b>\n\n"
+            f"Юлия открыла вам доступ к <b>{type_label}у</b>.\n\n"
+            f"Нажмите кнопку ниже чтобы начать — или отправьте /start:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=f"🔮 Начать {type_label}",
+                    callback_data=f"buy:{scan_type}"
+                )
+            ]]),
+        )
+    except Exception:
+        logger.warning("Не удалось отправить уведомление пользователю telegram_id=%s", user.telegram_id)
+        await message.answer("⚠️ Доступ выдан, но уведомить пользователя не удалось (заблокировал бота?).")
+
+
+# ── /revoke — забрать доступ ─────────────────────────────────────────────────
+
+@router.message(Command("revoke"))
+async def cmd_revoke(message: Message, session: AsyncSession) -> None:
+    """/revoke <telegram_id|@username> — убрать подписку."""
+    if not _is_admin(message):
+        return
+    from sqlalchemy import select as sa_select
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        await message.answer("Использование: <code>/revoke 123456789</code> или <code>/revoke @username</code>", parse_mode="HTML")
+        return
+    target = parts[1]
+    if target.startswith("@"):
+        result = await session.execute(sa_select(User).where(User.username.ilike(target[1:])))
+    else:
+        try:
+            result = await session.execute(sa_select(User).where(User.telegram_id == int(target)))
+        except ValueError:
+            await message.answer("Неверный ID.")
+            return
+    user = result.scalar_one_or_none()
+    if user is None:
+        await message.answer(f"Пользователь {target} не найден.")
+        return
+    user.subscription_until = None
+    await session.commit()
+    display = f"@{user.username}" if user.username else f"id:{user.telegram_id}"
+    await message.answer(f"🚫 Доступ отозван: {display}")
+
+
+# ── /whois — проверить пользователя ──────────────────────────────────────────
+
+@router.message(Command("whois"))
+async def cmd_whois(message: Message, session: AsyncSession) -> None:
+    """/whois <telegram_id|@username> — статус пользователя."""
+    if not _is_admin(message):
+        return
+    from datetime import datetime, timezone
+    from sqlalchemy import select as sa_select
+    parts = message.text.strip().split()
+    if len(parts) != 2:
+        await message.answer("Использование: <code>/whois 123456789</code>", parse_mode="HTML")
+        return
+    target = parts[1]
+    if target.startswith("@"):
+        result = await session.execute(sa_select(User).where(User.username.ilike(target[1:])))
+    else:
+        try:
+            result = await session.execute(sa_select(User).where(User.telegram_id == int(target)))
+        except ValueError:
+            await message.answer("Неверный ID.")
+            return
+    user = result.scalar_one_or_none()
+    if user is None:
+        await message.answer(f"Пользователь {target} не найден.")
+        return
+    now = datetime.now(timezone.utc)
+    has_sub = user.subscription_until and user.subscription_until > now
+    sub_str = user.subscription_until.strftime('%d.%m.%Y') if user.subscription_until else "нет"
+    display = f"@{user.username}" if user.username else f"id:{user.telegram_id}"
+    await message.answer(
+        f"👤 <b>{display}</b>  ({user.full_name or '—'})\n"
+        f"🆔 telegram_id: <code>{user.telegram_id}</code>\n"
+        f"📅 Зарегистрирован: {user.created_at.strftime('%d.%m.%Y') if user.created_at else '—'}\n"
+        f"🔐 Подписка: {'✅ активна до ' + sub_str if has_sub else '❌ нет'}\n\n"
+        f"<code>/grant {user.telegram_id} personal</code> — дать доступ личный\n"
+        f"<code>/grant {user.telegram_id} business</code> — дать бизнес\n"
+        f"<code>/revoke {user.telegram_id}</code> — отозвать",
+        parse_mode="HTML",
+    )
+
+
+# ── Inline-кнопка быстрой выдачи доступа (из уведомления о заявке) ───────────
+
+@router.callback_query(lambda c: c.data and c.data.startswith("quick_grant:"))
+async def handle_quick_grant(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Выдать доступ одной кнопкой прямо из уведомления о заявке."""
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import select as sa_select
+    _, tg_id_str, scan_type = callback.data.split(":")
+    tg_id = int(tg_id_str)
+    result = await session.execute(sa_select(User).where(User.telegram_id == tg_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        await callback.answer("Пользователь не найден в БД", show_alert=True)
+        return
+    now = datetime.now(timezone.utc)
+    user.subscription_until = now + timedelta(days=30)
+    await session.commit()
+    type_label = "личный разбор" if scan_type == "personal" else "бизнес-разбор"
+    display = f"@{user.username}" if user.username else f"id:{user.telegram_id}"
+    await callback.answer(f"✅ Доступ выдан: {display}", show_alert=True)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(f"✅ <b>Выдан:</b> {display} → {type_label}", parse_mode="HTML")
+    # Уведомить пользователя
+    try:
+        await callback.message.bot.send_message(
+            tg_id,
+            f"✅ <b>Оплата подтверждена!</b>\n\n"
+            f"Юлия открыла вам доступ к <b>{type_label}у</b>.\n\n"
+            f"Нажмите кнопку ниже чтобы начать:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(text=f"▶️ Начать {type_label}", callback_data=f"buy:{scan_type}")
+            ]]),
+        )
+    except Exception:
+        pass
+
+
+# ── Быстрый скан для админа (кнопки "Разбор" / "Бизнес разбор") ──────────────
+
+class AdminQuickScanStates(StatesGroup):
+    waiting_request = State()
+
+
+@router.callback_query(lambda c: c.data in ("admin_scan:personal", "admin_scan:business"))
+async def handle_admin_quick_scan_start(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    scan_type = callback.data.split(":")[1]
+    label = "личного" if scan_type == "personal" else "бизнес"
+    await state.set_state(AdminQuickScanStates.waiting_request)
+    await state.update_data(admin_scan_type=scan_type)
+    await callback.answer()
+    await callback.message.answer(
+        f"✍️ <b>{label.capitalize()} разбор</b>\n\nНапиши запрос — что хочешь понять или получить от скана:",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminQuickScanStates.waiting_request)
+async def handle_admin_quick_scan_request(
+    message: Message, state: FSMContext, session: AsyncSession
+) -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    from app.services.scan_service import ScanService
+    from app.services.user_service import UserService
+    from app.bot.handlers.full_scan import generate_and_deliver_report
+
+    data = await state.get_data()
+    scan_type = data.get("admin_scan_type", "personal")
+    await state.clear()
+
+    user_service = UserService(session)
+    user, _ = await user_service.get_or_create(
+        telegram_id=message.from_user.id,
+        username=message.from_user.username,
+        full_name=message.from_user.full_name,
+    )
+
+    scan_service = ScanService(session)
+    scan = await scan_service.create_full_scan(user.id, scan_type)
+
+    # Заполняем ответы: birth_date из профиля + запрос
+    answers: dict = {}
+    if user.birth_date:
+        answers["birth_date"] = user.birth_date.isoformat()
+    answers["name"] = message.from_user.first_name or "Юлия"
+    answers["scan_request"] = message.text or ""
+    scan.answers = answers
+    scan.is_paid = True
+    await session.commit()
+
+    await message.answer("🔮 Генерирую разбор...")
+    await generate_and_deliver_report(
+        message.bot, message.chat.id, scan.id, scan_type, session
+    )
+
+
+# ── Кнопка "Отчеты за день" ───────────────────────────────────────────────────
+
+@router.callback_query(lambda c: c.data == "admin_report_today")
+async def handle_admin_report_today(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    await callback.answer()
+
+    from datetime import datetime, timezone, timedelta
+    from app.models.scan import ScanStatus
+
+    now = datetime.now(timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
+
+    new_today = await session.scalar(
+        select(func.count()).select_from(User).where(User.created_at >= today)
+    )
+    total_users = await session.scalar(select(func.count()).select_from(User))
+
+    mini_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "mini", Scan.created_at >= today)
+    )
+    personal_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "personal", Scan.created_at >= today,
+               Scan.status == ScanStatus.completed.value)
+    )
+    business_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "business", Scan.created_at >= today,
+               Scan.status == ScanStatus.completed.value)
+    )
+    paid_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= today)
+    )
+    paid_week = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= week_ago)
+    )
+
+    # Последние 5 сканов за день
+    recent_scans = (await session.execute(
+        select(Scan, User)
+        .join(User, Scan.user_id == User.id)
+        .where(Scan.created_at >= today)
+        .order_by(Scan.created_at.desc())
+        .limit(5)
+    )).all()
+
+    lines = [
+        f"📊 <b>Отчёт за сегодня</b> — {now.strftime('%d.%m.%Y')}\n",
+        f"👥 Новых пользователей: <b>{new_today}</b> (всего: {total_users})",
+        f"👁 Мини-сканов: <b>{mini_today}</b>",
+        f"🔮 Личных разборов: <b>{personal_today}</b>",
+        f"💼 Бизнес-разборов: <b>{business_today}</b>",
+        f"💰 Оплат сегодня: <b>{paid_today}</b>",
+        f"💰 Оплат за 7 дней: <b>{paid_week}</b>",
+    ]
+
+    if recent_scans:
+        lines.append("\n<b>Последние сканы:</b>")
+        for sc, usr in recent_scans:
+            uname = f"@{usr.username}" if usr.username else f"id:{usr.telegram_id}"
+            t = sc.created_at.strftime("%H:%M")
+            lines.append(f"  {t} — {uname} — {sc.scan_type} — {sc.status}")
+
+    from app.bot.handlers.start import _admin_keyboard
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=_admin_keyboard(),
+    )
+
+
+# ── Полный отчёт + кто не оплатил ────────────────────────────────────────────
+
+async def _send_full_report(target: Message | CallbackQuery, session: AsyncSession) -> None:
+    from datetime import datetime, timezone, timedelta
+    from app.models.scan import ScanStatus
+
+    send = target.answer if isinstance(target, Message) else target.message.answer
+    now = datetime.now(timezone.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+
+    # ── Всё время ──────────────────────────────────────────────
+    total_users = await session.scalar(select(func.count()).select_from(User))
+    mini_done = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "mini", Scan.status == ScanStatus.completed.value)
+    )
+    personal_done = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "personal", Scan.status == ScanStatus.completed.value)
+    )
+    business_done = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "business", Scan.status == ScanStatus.completed.value)
+    )
+    paid_total = await session.scalar(
+        select(func.count()).select_from(Scan).where(Scan.is_paid.is_(True))
+    )
+
+    # ── Вчера ──────────────────────────────────────────────────
+    new_yesterday = await session.scalar(
+        select(func.count()).select_from(User)
+        .where(User.created_at >= yesterday, User.created_at < today)
+    )
+    scans_yesterday = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.created_at >= yesterday, Scan.created_at < today,
+               Scan.status == ScanStatus.completed.value)
+    )
+    paid_yesterday = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= yesterday, Scan.created_at < today)
+    )
+
+    # ── Сегодня ────────────────────────────────────────────────
+    new_today = await session.scalar(
+        select(func.count()).select_from(User).where(User.created_at >= today)
+    )
+    scans_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.created_at >= today, Scan.status == ScanStatus.completed.value)
+    )
+    paid_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= today)
+    )
+
+    # ── Не оплатили (pending payments) ────────────────────────
+    pending_rows = (await session.execute(
+        select(Payment, User)
+        .join(User, Payment.user_id == User.id)
+        .where(Payment.status == "pending")
+        .order_by(Payment.created_at.desc())
+    )).all()
+
+    # ── Сообщение 1: общая статистика ─────────────────────────
+    await send(
+        f"📈 <b>ПОЛНЫЙ ОТЧЁТ — Глаз Бога</b>\n"
+        f"<i>{now.strftime('%d.%m.%Y %H:%M')} UTC</i>\n\n"
+
+        f"👥 <b>Пользователей всего:</b> {total_users}\n\n"
+
+        f"🔍 <b>Сканы за всё время:</b>\n"
+        f"  👁 Мини: <b>{mini_done}</b> завершено\n"
+        f"  🔮 Личных: <b>{personal_done}</b> завершено\n"
+        f"  💼 Бизнес: <b>{business_done}</b> завершено\n"
+        f"  💰 Оплачено всего: <b>{paid_total}</b>\n\n"
+
+        f"📅 <b>Вчера ({yesterday.strftime('%d.%m')}):</b>\n"
+        f"  Новых пользователей: <b>{new_yesterday}</b>\n"
+        f"  Сканов завершено: <b>{scans_yesterday}</b>\n"
+        f"  Оплат: <b>{paid_yesterday}</b>\n\n"
+
+        f"📅 <b>Сегодня ({today.strftime('%d.%m')}):</b>\n"
+        f"  Новых пользователей: <b>{new_today}</b>\n"
+        f"  Сканов завершено: <b>{scans_today}</b>\n"
+        f"  Оплат: <b>{paid_today}</b>",
+        parse_mode="HTML",
+    )
+
+    # ── Сообщение 2: кто не оплатил ───────────────────────────
+    if not pending_rows:
+        await send("✅ <b>Незакрытых заявок нет.</b>", parse_mode="HTML")
+        return
+
+    lines = [f"⚠️ <b>Хотели купить, но не оплатили — {len(pending_rows)} чел.:</b>\n"]
+    for pay, usr in pending_rows:
+        uname = f"@{usr.username}" if usr.username else f"id:{usr.telegram_id}"
+        name = usr.full_name or uname
+        product = "Личный" if pay.product_type == "personal" else "Бизнес"
+        date_str = pay.created_at.strftime("%d.%m %H:%M")
+        lines.append(
+            f"👤 <b>{name}</b> ({uname})\n"
+            f"   {product} | {date_str}\n"
+            f"   /grant {usr.telegram_id} {pay.product_type}"
+        )
+
+    full_text = "\n".join(lines)
+    chunks = [full_text[i:i+4000] for i in range(0, len(full_text), 4000)]
+    for chunk in chunks:
+        await send(chunk, parse_mode="HTML")
+
+
+@router.callback_query(lambda c: c.data == "admin_report_full")
+async def handle_admin_report_full(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+    await _send_full_report(callback, session)
+
+
+@router.message(Command("report"))
+async def cmd_report(message: Message, session: AsyncSession) -> None:
+    if not _is_admin(message):
+        return
+    await _send_full_report(message, session)
+
+
+# ── Кнопка "Все пользователи" ─────────────────────────────────────────────────
+
+@router.callback_query(lambda c: c.data == "admin_users")
+async def handle_admin_users(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    await callback.answer()
+
+    users = (await session.execute(
+        select(User).order_by(User.created_at.desc()).limit(20)
+    )).scalars().all()
+
+    lines = [f"👥 <b>Последние 20 пользователей:</b>\n"]
+    for u in users:
+        uname = f"@{u.username}" if u.username else f"id:{u.telegram_id}"
+        sub = "✅" if (u.subscription_until and u.subscription_until > __import__('datetime').datetime.now(__import__('datetime').timezone.utc)) else "—"
+        lines.append(f"{sub} {uname} — {u.created_at.strftime('%d.%m')}")
+
+    await callback.message.answer("\n".join(lines), parse_mode="HTML")
+
+
 # ── /broadcast ────────────────────────────────────────────────────────────────
 
 class BroadcastStates(StatesGroup):
@@ -373,4 +873,70 @@ async def broadcast_confirm(message: Message, state: FSMContext, session: AsyncS
         f"✅ Рассылка завершена\n\n"
         f"Отправлено: {sent}\n"
         f"Ошибок: {failed}"
+    )
+
+
+# ── /api — управление API ключами ────────────────────────────────────────────
+
+def _api_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🔑 Ключ 1 (основной)", callback_data="api_switch:0"),
+            InlineKeyboardButton(text="🔑 Ключ 2 (резерв)", callback_data="api_switch:1"),
+        ],
+        [InlineKeyboardButton(text="🔄 Обновить статус", callback_data="api_status")],
+    ])
+
+
+def _api_status_text() -> str:
+    s = api_get_status()
+    active = s["active_key"]
+    k1 = f"{'✅' if s['key_1_set'] else '❌'} Ключ 1: {s['key_1_mask']}"
+    k2 = f"{'✅' if s['key_2_set'] else '❌'} Ключ 2: {s['key_2_mask']}"
+    indicator = f"{'🟢' if active == 1 else '⚪'} Ключ 1    {'🟢' if active == 2 else '⚪'} Ключ 2"
+
+    log_lines = "\n".join(s["switch_log"]) if s["switch_log"] else "Переключений не было"
+
+    return (
+        f"🔑 <b>API ключи Anthropic</b>\n\n"
+        f"{k1}\n"
+        f"{k2}\n\n"
+        f"<b>Активный:</b> {indicator}\n\n"
+        f"📊 Вызовов: {s['call_count']} | Ошибок: {s['error_count']}\n\n"
+        f"<b>История переключений:</b>\n{log_lines}\n\n"
+        f"💡 <i>Пополнить баланс: console.anthropic.com → Billing</i>"
+    )
+
+
+@router.message(Command("api"))
+async def cmd_api_status(message: Message) -> None:
+    if not _is_admin(message):
+        return
+    await message.answer(_api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard())
+
+
+@router.callback_query(lambda c: c.data == "api_status")
+async def handle_api_status(callback: CallbackQuery) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+    await callback.message.edit_text(
+        _api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard()
+    )
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("api_switch:"))
+async def handle_api_switch(callback: CallbackQuery) -> None:
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    index = int(callback.data.split(":")[1])
+    success = set_active_key(index)
+    if success:
+        await callback.answer(f"✅ Переключено на Ключ {index + 1}", show_alert=True)
+    else:
+        await callback.answer("❌ Ключ не настроен в .env", show_alert=True)
+    await callback.message.edit_text(
+        _api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard()
     )

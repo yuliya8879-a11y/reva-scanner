@@ -35,6 +35,7 @@ import logging
 import anthropic
 
 from app.config import settings
+from app.services.ai_client import messages_create, APIKeysExhaustedError
 from app.services.algorithm import PERSONAL_ALGORITHM_BLOCK
 
 logger = logging.getLogger(__name__)
@@ -404,7 +405,7 @@ _PROMPT_NO_REQUEST = (
 
 class AIService:
     def __init__(self) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        pass  # клиент создаётся динамически через ai_client с failover
 
     async def generate_full_free_report(
         self, answers: dict, soul_number=None
@@ -426,7 +427,7 @@ class AIService:
         )
         prompt = "\n".join(parts)
 
-        response = await self._client.messages.create(
+        response = await messages_create(
             model="claude-sonnet-4-6",
             max_tokens=3000,
             system=_MINI_FREE_SYSTEM,
@@ -451,7 +452,7 @@ class AIService:
             parts.append(f"Запрос: {request}")
         prompt = "\n".join(parts)
 
-        response = await self._client.messages.create(
+        response = await messages_create(
             model="claude-haiku-4-5-20251001",
             max_tokens=400,
             system=_MINI_TEASER_SYSTEM,
@@ -472,7 +473,7 @@ class AIService:
         else:
             prompt = _PROMPT_NO_REQUEST.format(user_name=user_name)
 
-        response = await self._client.messages.create(
+        response = await messages_create(
             model="claude-sonnet-4-6",
             max_tokens=4000,
             system=_PERSONAL_SYSTEM,
@@ -493,7 +494,7 @@ class AIService:
         else:
             prompt = _PROMPT_NO_REQUEST.format(user_name=user_name)
 
-        response = await self._client.messages.create(
+        response = await messages_create(
             model="claude-sonnet-4-6",
             max_tokens=4000,
             system=_BUSINESS_SYSTEM,

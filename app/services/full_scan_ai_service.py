@@ -9,6 +9,7 @@ from datetime import date
 import anthropic
 
 from app.config import settings
+from app.services.ai_client import messages_create, APIKeysExhaustedError
 from app.services.numerology import calculate_soul_number
 from app.services.algorithm import BUSINESS_ALGORITHM_BLOCK, PERSONAL_ALGORITHM_BLOCK
 
@@ -404,7 +405,7 @@ class FullScanAIService:
     """Claude Sonnet wrapper for generating full 6-block diagnostic reports."""
 
     def __init__(self) -> None:
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        pass  # клиент создаётся динамически через ai_client с failover
 
     async def generate_full_report(
         self,
@@ -433,7 +434,7 @@ class FullScanAIService:
 
         system_prompt = _BUSINESS_SYSTEM_PROMPT if scan_type == "business" else _PERSONAL_SYSTEM_PROMPT
 
-        response = await self._client.messages.create(
+        response = await messages_create(
             model="claude-sonnet-4-6",
             max_tokens=8000,
             system=system_prompt,

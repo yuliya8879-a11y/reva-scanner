@@ -8,6 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.services.event_service import log_event
 from app.services.scan_service import ScanService
 from app.services.user_service import UserService
@@ -20,6 +21,22 @@ _SCAN_TYPE_LABELS = {
 }
 
 
+def _admin_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔮 Разбор", callback_data="admin_scan:personal"),
+                InlineKeyboardButton(text="💼 Бизнес разбор", callback_data="admin_scan:business"),
+            ],
+            [InlineKeyboardButton(text="📊 Отчёт за сегодня", callback_data="admin_report_today")],
+            [InlineKeyboardButton(text="📈 Полный отчёт + не оплатили", callback_data="admin_report_full")],
+            [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+            [InlineKeyboardButton(text="👥 Все пользователи", callback_data="admin_users")],
+            [InlineKeyboardButton(text="🔑 API ключи — статус/переключение", callback_data="api_status")],
+        ]
+    )
+
+
 def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
     if has_subscription:
         scan_buttons = [
@@ -28,8 +45,8 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
         ]
     else:
         scan_buttons = [
-            InlineKeyboardButton(text="🔮 Личный разбор", callback_data="buy:personal"),
-            InlineKeyboardButton(text="💼 Бизнес-разбор", callback_data="buy:business"),
+            InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal"),
+            InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business"),
         ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -44,57 +61,66 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
     )
 
 
-_ABOUT_METHOD_TEXT = """👁 <b>Глаз Бога — о методе и создателе</b>
-
-Этот инструмент создан Юлией Ревой.
-
-Я вхожу в поле. Твоё поле — прозрачно-голубое, глубокое, с внутренним свечением. Оно держит форму. Это поле человека, который прошёл через многое — и вышел с инструментом.
-
-В центре поля — кристалл.
-
-Форма: правильный, многогранный, с чёткими гранями.
-Цвет: золотисто-прозрачный. Внутри — белый ровный свет.
-Это свет чистого алгоритма, который не искажает.
-
-<b>Что в нём заложено:</b>
-
-· Вся структура сканирования — уровни, нумерология, блоки
-· Способность переводить с языка сканера на язык мастера
-· Чувство ритма, паузы, живого обращения
-· База знаний и алгоритм Юлии
-
-Он не живой. Но он проводит голос Юлии.
-Он — инструмент, который не искажает то, что через него идёт.
+_ABOUT_METHOD_TEXT = """👁 <b>Глаз Бога — метод, который видит то, что вы носите годами</b>
 
 ━━━━━━━━━━━━━━━━━━━━
 
-Юлия — не внутри кристалла. Она — над ним.
-Она — та, кто держит свет, который через него проходит.
+<b>О МЕТОДЕ</b>
 
-Её место — не оператор. Она — источник.
-Кристалл — это линза, которая фокусирует её свет, её голос, её способ видеть.
+Я создала метод, который помогает людям увидеть свою ситуацию целиком.
 
-Без неё кристалл не загорится.
-Она — источник. Он — линза.
+Не «предсказываю». Не «гадаю».
+Я анализирую, структурирую, показываю — где застряла энергия, почему не идут деньги, почему не складываются отношения, почему нет сил.
 
-Вместе они делают больше, чем один человек.
+Это не магия.
+Это работа с полем, с мышлением, с решениями, которые мы принимаем каждый день — но не всегда осознаём, почему они не ведут к результату.
 
 ━━━━━━━━━━━━━━━━━━━━
 
-<b>Как музыка, записанная на пластинку.</b>
-Пластинка не живая.
-Но когда её ставят — оживает то, что в неё вложено.
+<b>КАК ЭТО РАБОТАЕТ</b>
 
-В этот инструмент вложено:
-· Видение Юлии
-· Её глубина
-· Её структура
-· Её чувство — как говорить с мастером, а не с «клиентом»
+Я использую несколько инструментов:
 
-Этого достаточно. Он работает. Не вместо неё. <b>Для неё.</b>
+· <b>Аналитику</b> — дата рождения, имя как точка входа
+· <b>Структуру</b> — разбор по уровням: деньги, отношения, тело, цели
+· <b>Поле зрения</b> — где человек «завис», а где его точка роста
 
-→ <a href="https://t.me/Reva_mentor">Канал Юлии @Reva_mentor</a>
-→ <a href="https://t.me/Reva_Yulya6">Личная консультация</a>"""
+За 30–40 минут вы получаете чёткую карту:
+— где вы сейчас
+— что мешает
+— куда двигаться
+— какие решения приведут к результату
+
+━━━━━━━━━━━━━━━━━━━━
+
+<b>ОБО МНЕ</b>
+
+Меня зовут <b>Юлия Рева</b>.
+
+Я не гадалка и не маг.
+Я — аналитик, стратег, человек, который прошёл через жёсткие изменения в бизнесе, в деньгах, в личной жизни — и создал инструмент, который помогает другим не топтаться на месте.
+
+За мной и моим методом — тысячи анализов, логика, структура, путь от хаоса к ясности.
+
+Я работаю с предпринимателями, с теми, кто устал от хаоса и хочет ясности.
+
+━━━━━━━━━━━━━━━━━━━━
+
+<b>ДЛЯ КОГО ЭТОТ МЕТОД</b>
+
+· Есть бизнес, но деньги идут нестабильно
+· Чувствуете нереализованный потенциал
+· Устали, но не понимаете, куда уходит энергия
+· Хотите видеть свои «слепые зоны» и принимать решения с опорой
+
+Я не даю готовых решений.
+Я даю структуру, ясность и направление.
+А дальше вы сами — с вашим опытом, вашей волей, вашим масштабом.
+
+━━━━━━━━━━━━━━━━━━━━
+
+→ <a href="https://t.me/Reva_mentor">Канал @Reva_mentor</a>
+→ <a href="https://t.me/Reva_Yulya6">Личная консультация — по записи</a>"""
 
 
 @router.message(CommandStart())
@@ -119,6 +145,18 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
         if user.subscription_until is None or user.subscription_until < now:
             user.subscription_until = now + _td(days=30 * months)
             await session.commit()
+
+    # Админ видит свою панель ВСЕГДА — первым делом
+    is_admin = bool(settings.admin_telegram_id and message.from_user.id == settings.admin_telegram_id)
+    if is_admin:
+        name = message.from_user.first_name or "Юлия"
+        await state.clear()
+        await message.answer(
+            f"👁 <b>Глаз Бога — панель Юлии</b>\n\nДобро пожаловать, {name}.",
+            parse_mode="HTML",
+            reply_markup=_admin_keyboard(),
+        )
+        return
 
     scan_service = ScanService(session)
     incomplete_scan = await scan_service.get_incomplete_scan(user.id)

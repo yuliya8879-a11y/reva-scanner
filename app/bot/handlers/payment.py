@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Message, PreCheckoutQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aiogram import Bot
@@ -144,25 +144,17 @@ async def handle_buy_callback(
     scan_type = callback.data.split(":")[1]  # "personal" or "business"
     stars = STARS_PRICE_PERSONAL if scan_type == "personal" else STARS_PRICE_BUSINESS
 
-    # Оплата приостановлена (ожидает подключения банка)
-    if PAYMENT_PAUSED:
-        await callback.answer()
-        await callback.message.answer(
-            "⏳ <b>Оплата временно недоступна.</b>\n\n"
-            "Мы настраиваем платёжную систему — совсем скоро всё заработает.\n\n"
-            "Хочешь — напиши Юлии лично, договоримся:",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-                InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")
-            ]])
-        )
-        return
-
     user_service = UserService(session)
     user, _ = await user_service.get_or_create(
         telegram_id=callback.from_user.id,
         username=callback.from_user.username,
         full_name=callback.from_user.full_name,
+    )
+
+    # Проверка активной подписки — пропускаем оплату
+    has_subscription = (
+        user.subscription_until is not None
+        and user.subscription_until > datetime.now(timezone.utc)
     )
 
     scan_service = ScanService(session)
@@ -172,7 +164,6 @@ async def handle_buy_callback(
         if existing.scan_type == scan_type:
             scan = existing
         else:
-            # Different scan type — cancel old, start fresh
             existing.status = ScanStatus.failed.value
             await session.commit()
             scan = await scan_service.create_full_scan(user.id, scan_type)
@@ -187,41 +178,64 @@ async def handle_buy_callback(
         product_type=scan_type,
     )
 
-    # Проверка активной подписки — пропускаем оплату
-    has_subscription = (
-        user.subscription_until is not None
-        and user.subscription_until > datetime.now(timezone.utc)
-    )
-
-    # Тестовый режим для админа — пропускаем оплату и опросник
+    # Подписка / админ — подтверждаем без оплаты, но ведём через опросник (нужен запрос!)
     is_admin = settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id
     if is_admin or has_subscription:
         await payment_service.confirm_payment(
-            telegram_charge_id="test_free_access",
+            telegram_charge_id="free_access",
             scan_id=scan.id,
         )
         await callback.answer()
-        await _admin_generate_report(
+        # Импорт здесь — избегаем циклической зависимости
+        from app.bot.handlers.full_scan import start_questionnaire_after_payment
+        await start_questionnaire_after_payment(
             bot=callback.message.bot,
             chat_id=callback.message.chat.id,
             scan_id=scan.id,
             scan_type=scan_type,
-            user_name=callback.from_user.first_name or callback.from_user.full_name or "",
+            state=state,
             session=session,
+            telegram_first_name=callback.from_user.first_name or callback.from_user.full_name or "",
         )
         return
 
-    await callback.message.answer("Сейчас выставим счёт...")
-    await callback.message.bot.send_invoice(
-        chat_id=callback.message.chat.id,
-        title="Полный скан бизнеса" if scan_type == "business" else "Полный скан",
-        description="Персональный разбор 6 блоков: архитектура, слепые зоны, деньги и другие",
-        payload=f"scan:{scan.id}:user:{user.id}",
-        provider_token="",  # empty string required for Telegram Stars (XTR)
-        currency="XTR",
-        prices=[LabeledPrice(label="Полный скан", amount=stars)],
-    )
+    # Новый флоу: уведомить Юлию — пользователь хочет оплатить
+    price_label = "3 500 ₽" if scan_type == "personal" else "10 000 ₽"
+    type_label = "личный разбор" if scan_type == "personal" else "бизнес-разбор"
+    user_name = callback.from_user.full_name or callback.from_user.first_name or "—"
+    user_at = f"@{callback.from_user.username}" if callback.from_user.username else f"id:{callback.from_user.id}"
+
+    if settings.admin_telegram_id:
+        await callback.message.bot.send_message(
+            settings.admin_telegram_id,
+            f"💳 <b>Новая заявка на оплату</b>\n\n"
+            f"👤 {user_name}  |  {user_at}\n"
+            f"📦 {type_label.capitalize()} — {price_label}\n\n"
+            f"<code>/grant {callback.from_user.id} {scan_type}</code>",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=f"✅ Выдать доступ ({price_label})",
+                    callback_data=f"quick_grant:{callback.from_user.id}:{scan_type}"
+                )],
+                [InlineKeyboardButton(
+                    text="💬 Написать пользователю",
+                    url=f"tg://user?id={callback.from_user.id}"
+                )],
+            ]),
+        )
+
     await callback.answer()
+    await callback.message.answer(
+        f"✅ <b>Заявка принята!</b>\n\n"
+        f"Юлия получила уведомление и свяжется с вами для оплаты.\n\n"
+        f"После подтверждения оплаты вам откроется доступ к <b>{type_label}у</b>.\n\n"
+        f"Если хотите ускорить — напишите напрямую:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")
+        ]]),
+    )
 
 
 # ---------------------------------------------------------------------------
