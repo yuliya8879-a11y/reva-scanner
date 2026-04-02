@@ -798,29 +798,218 @@ async def cmd_report(message: Message, session: AsyncSession) -> None:
     await _send_full_report(message, session)
 
 
-# ── Кнопка "Все пользователи" ─────────────────────────────────────────────────
+# ── Управление пользователями ────────────────────────────────────────────────
+
+def _is_admin_cb(callback: CallbackQuery) -> bool:
+    return bool(settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id)
+
 
 @router.callback_query(lambda c: c.data == "admin_users")
 async def handle_admin_users(
     callback: CallbackQuery, session: AsyncSession
 ) -> None:
-    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+    if not _is_admin_cb(callback):
         await callback.answer("Нет доступа", show_alert=True)
         return
 
     await callback.answer()
 
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
     users = (await session.execute(
         select(User).order_by(User.created_at.desc()).limit(20)
     )).scalars().all()
 
-    lines = [f"👥 <b>Последние 20 пользователей:</b>\n"]
+    lines = ["👥 <b>Пользователи (последние 20)</b>\n"]
+    buttons = []
     for u in users:
         uname = f"@{u.username}" if u.username else f"id:{u.telegram_id}"
-        sub = "✅" if (u.subscription_until and u.subscription_until > __import__('datetime').datetime.now(__import__('datetime').timezone.utc)) else "—"
-        lines.append(f"{sub} {uname} — {u.created_at.strftime('%d.%m')}")
+        has_sub = u.subscription_until and u.subscription_until > now
+        sub_icon = "✅" if has_sub else "—"
+        lines.append(f"{sub_icon} {uname} — {u.created_at.strftime('%d.%m.%Y')}")
+        buttons.append([
+            InlineKeyboardButton(text=f"👤 {uname}", callback_data=f"user_card:{u.id}"),
+        ])
 
-    await callback.message.answer("\n".join(lines), parse_mode="HTML")
+    await callback.message.answer(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("user_card:"))
+async def handle_user_card(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not _is_admin_cb(callback):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+
+    user_id = int(callback.data.split(":")[1])
+    user = await session.get(User, user_id)
+    if not user:
+        await callback.message.answer("Пользователь не найден.")
+        return
+
+    uname = f"@{user.username}" if user.username else f"tg:{user.telegram_id}"
+    has_sub = user.subscription_until and user.subscription_until > now
+    sub_status = (
+        f"✅ до {user.subscription_until.strftime('%d.%m.%Y')}"
+        if has_sub else "❌ нет подписки"
+    )
+
+    scans_count = await session.scalar(
+        select(func.count()).select_from(Scan).where(Scan.user_id == user_id)
+    )
+    paid_count = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.user_id == user_id, Scan.is_paid.is_(True))
+    )
+
+    text = (
+        f"👤 <b>{user.full_name or uname}</b>\n"
+        f"Username: {uname}\n"
+        f"ID: <code>{user.telegram_id}</code>\n"
+        f"Зарегистрирован: {user.created_at.strftime('%d.%m.%Y')}\n\n"
+        f"📋 Подписка: {sub_status}\n"
+        f"🔍 Сканов всего: {scans_count} (оплачено: {paid_count})"
+    )
+
+    await callback.message.answer(
+        text,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Дать 1 мес", callback_data=f"user_grant:{user_id}:1"),
+                InlineKeyboardButton(text="✅ Дать 3 мес", callback_data=f"user_grant:{user_id}:3"),
+                InlineKeyboardButton(text="✅ Дать 6 мес", callback_data=f"user_grant:{user_id}:6"),
+            ],
+            [InlineKeyboardButton(text="❌ Отозвать доступ", callback_data=f"user_revoke:{user_id}")],
+            [InlineKeyboardButton(text="📋 Запросы пользователя", callback_data=f"user_scans:{user_id}")],
+            [InlineKeyboardButton(text="← Назад", callback_data="admin_users")],
+        ]),
+    )
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("user_grant:"))
+async def handle_user_grant(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not _is_admin_cb(callback):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    from datetime import datetime, timezone, timedelta
+    parts = callback.data.split(":")
+    user_id = int(parts[1])
+    months = int(parts[2])
+
+    user = await session.get(User, user_id)
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    now = datetime.now(timezone.utc)
+    base = user.subscription_until if (user.subscription_until and user.subscription_until > now) else now
+    user.subscription_until = base + timedelta(days=30 * months)
+    await session.commit()
+
+    uname = f"@{user.username}" if user.username else str(user.telegram_id)
+    await callback.answer(f"✅ {uname} — доступ +{months} мес.", show_alert=True)
+
+    # Уведомить пользователя
+    try:
+        await callback.bot.send_message(
+            user.telegram_id,
+            f"✅ <b>Доступ активирован!</b>\n\n"
+            f"Ваша подписка действует до: <b>{user.subscription_until.strftime('%d.%m.%Y')}</b>\n\n"
+            f"Вы можете начать разбор прямо сейчас.",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+
+    await callback.message.answer(
+        f"✅ <b>{uname}</b> — подписка выдана на {months} мес.\n"
+        f"Действует до: {user.subscription_until.strftime('%d.%m.%Y')}",
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("user_revoke:"))
+async def handle_user_revoke(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not _is_admin_cb(callback):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    from datetime import datetime, timezone, timedelta
+    user_id = int(callback.data.split(":")[1])
+    user = await session.get(User, user_id)
+    if not user:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    user.subscription_until = datetime.now(timezone.utc) - timedelta(days=1)
+    await session.commit()
+
+    uname = f"@{user.username}" if user.username else str(user.telegram_id)
+    await callback.answer(f"❌ Доступ {uname} отозван", show_alert=True)
+    await callback.message.answer(f"❌ Подписка <b>{uname}</b> отозвана.", parse_mode="HTML")
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("user_scans:"))
+async def handle_user_scans(callback: CallbackQuery, session: AsyncSession) -> None:
+    if not _is_admin_cb(callback):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    user_id = int(callback.data.split(":")[1])
+    user = await session.get(User, user_id)
+    if not user:
+        await callback.message.answer("Пользователь не найден.")
+        return
+
+    scans = (await session.execute(
+        select(Scan)
+        .where(Scan.user_id == user_id)
+        .order_by(Scan.created_at.desc())
+        .limit(5)
+    )).scalars().all()
+
+    uname = f"@{user.username}" if user.username else str(user.telegram_id)
+    _type_labels = {"mini": "Мини", "personal": "Личный", "business": "Бизнес"}
+
+    if not scans:
+        await callback.message.answer(f"У {uname} пока нет сканов.")
+        return
+
+    for s in scans:
+        label = _type_labels.get(s.scan_type, s.scan_type)
+        date = s.created_at.strftime("%d.%m.%Y %H:%M") if s.created_at else "—"
+        paid = "💰 оплачен" if s.is_paid else "бесплатно"
+        status = s.status
+
+        # Показываем запрос пользователя
+        user_request = ""
+        if s.answers:
+            try:
+                import json as _json
+                answers = _json.loads(s.answers) if isinstance(s.answers, str) else s.answers
+                if isinstance(answers, dict):
+                    req = answers.get("request") or answers.get("situation") or answers.get("question") or ""
+                    if req:
+                        user_request = f"\n\n<b>Запрос:</b> {str(req)[:300]}"
+            except Exception:
+                pass
+
+        text = (
+            f"📋 <b>{label}</b> — {date}\n"
+            f"Статус: {status} | {paid}{user_request}"
+        )
+        await callback.message.answer(text, parse_mode="HTML")
 
 
 # ── /broadcast ────────────────────────────────────────────────────────────────
