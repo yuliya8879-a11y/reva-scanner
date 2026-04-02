@@ -19,7 +19,7 @@ from app.models.payment import Payment
 from app.models.scan import Scan
 from app.models.user import User
 from app.services.event_service import _EVENT_LABELS
-from app.services.ai_client import get_status as api_get_status, set_active_key
+from app.services.ai_client import get_status as api_get_status, set_active_key, add_or_replace_key
 
 logger = logging.getLogger(__name__)
 router = Router(name="admin")
@@ -893,13 +893,22 @@ async def broadcast_confirm(message: Message, state: FSMContext, session: AsyncS
 
 # ── /api — управление API ключами ────────────────────────────────────────────
 
+class ApiKeyStates(StatesGroup):
+    waiting_key_1 = State()
+    waiting_key_2 = State()
+
+
 def _api_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🔑 Ключ 1 (основной)", callback_data="api_switch:0"),
-            InlineKeyboardButton(text="🔑 Ключ 2 (резерв)", callback_data="api_switch:1"),
+            InlineKeyboardButton(text="🟢 Ключ 1 (основной)", callback_data="api_switch:0"),
+            InlineKeyboardButton(text="🔵 Ключ 2 (резерв)", callback_data="api_switch:1"),
         ],
-        [InlineKeyboardButton(text="🔄 Обновить статус", callback_data="api_status")],
+        [
+            InlineKeyboardButton(text="✏️ Вставить Ключ 1", callback_data="api_set:1"),
+            InlineKeyboardButton(text="✏️ Вставить Ключ 2", callback_data="api_set:2"),
+        ],
+        [InlineKeyboardButton(text="🔄 Обновить", callback_data="api_status")],
     ])
 
 
@@ -951,7 +960,70 @@ async def handle_api_switch(callback: CallbackQuery) -> None:
     if success:
         await callback.answer(f"✅ Переключено на Ключ {index + 1}", show_alert=True)
     else:
-        await callback.answer("❌ Ключ не настроен в .env", show_alert=True)
+        await callback.answer("❌ Ключ не настроен", show_alert=True)
     await callback.message.edit_text(
         _api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard()
     )
+
+
+# ── Вставить новый API ключ из бота ──────────────────────────────────────────
+
+@router.callback_query(lambda c: c.data and c.data.startswith("api_set:"))
+async def handle_api_set_start(callback: CallbackQuery, state: FSMContext) -> None:
+    """Нажали ✏️ Вставить Ключ 1/2 — запросить ключ."""
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    slot = int(callback.data.split(":")[1])
+    await callback.answer()
+    if slot == 1:
+        await state.set_state(ApiKeyStates.waiting_key_1)
+    else:
+        await state.set_state(ApiKeyStates.waiting_key_2)
+    await callback.message.answer(
+        f"🔑 <b>Вставь новый Ключ {slot}</b>\n\n"
+        f"Скопируй ключ из console.anthropic.com → API Keys\n"
+        f"Начинается с <code>sk-ant-</code>\n\n"
+        f"Просто отправь его сюда следующим сообщением:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="api_status")]
+        ]),
+    )
+
+
+@router.message(ApiKeyStates.waiting_key_1)
+async def handle_api_key_1_input(message: Message, state: FSMContext) -> None:
+    """Получить новый Ключ 1 и сохранить."""
+    await state.clear()
+    key = (message.text or "").strip()
+    if add_or_replace_key(1, key):
+        await message.answer(
+            "✅ <b>Ключ 1 обновлён!</b>\n\nБот уже использует новый ключ.",
+            parse_mode="HTML",
+            reply_markup=_api_keyboard(),
+        )
+        await message.answer(_api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard())
+    else:
+        await message.answer(
+            "❌ Неверный формат. Ключ должен начинаться с <code>sk-ant-</code>",
+            parse_mode="HTML",
+        )
+
+
+@router.message(ApiKeyStates.waiting_key_2)
+async def handle_api_key_2_input(message: Message, state: FSMContext) -> None:
+    """Получить новый Ключ 2 и сохранить."""
+    await state.clear()
+    key = (message.text or "").strip()
+    if add_or_replace_key(2, key):
+        await message.answer(
+            "✅ <b>Ключ 2 обновлён!</b>\n\nБот уже использует новый ключ.",
+            parse_mode="HTML",
+        )
+        await message.answer(_api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard())
+    else:
+        await message.answer(
+            "❌ Неверный формат. Ключ должен начинаться с <code>sk-ant-</code>",
+            parse_mode="HTML",
+        )
