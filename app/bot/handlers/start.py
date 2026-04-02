@@ -39,22 +39,25 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
 
 def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
     if has_subscription:
-        scan_buttons = [
-            InlineKeyboardButton(text="🔮 Новое личное сканирование", callback_data="buy:personal"),
-            InlineKeyboardButton(text="💼 Новое бизнес-сканирование", callback_data="buy:business"),
-        ]
-        cabinet_row = [InlineKeyboardButton(text="🗄 Мой кабинет", callback_data="my_cabinet")]
-    else:
-        scan_buttons = [
-            InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal"),
-            InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business"),
-        ]
-        cabinet_row = [InlineKeyboardButton(text="🗄 Мой кабинет 🔒", callback_data="my_cabinet")]
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="🔮 Новое личное сканирование", callback_data="buy:personal")],
+                [InlineKeyboardButton(text="💼 Новое бизнес-сканирование", callback_data="buy:business")],
+                [InlineKeyboardButton(text="🗄 Мой кабинет", callback_data="my_cabinet")],
+                [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+                [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
+                [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
+                [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
+                [InlineKeyboardButton(text="🆘 Помощь / сообщить об ошибке", callback_data="help_request")],
+                [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
+            ]
+        )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            scan_buttons,
-            cabinet_row,
             [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+            [InlineKeyboardButton(text="💳 Оплатить — Личный разбор — 3 500 ₽", callback_data="buy:personal")],
+            [InlineKeyboardButton(text="💳 Оплатить — Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
+            [InlineKeyboardButton(text="🗄 Мой кабинет 🔒", callback_data="my_cabinet")],
             [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
             [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
             [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
@@ -304,8 +307,8 @@ async def handle_my_cabinet(
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
-                    [InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
-                    [InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
+                    [InlineKeyboardButton(text="💳 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
+                    [InlineKeyboardButton(text="💳 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
                     [InlineKeyboardButton(text="← Назад", callback_data="back_to_menu")],
                 ]
             ),
@@ -343,10 +346,8 @@ async def handle_my_cabinet(
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(
             inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="🔮 Новый личный", callback_data="buy:personal"),
-                    InlineKeyboardButton(text="💼 Новый бизнес", callback_data="buy:business"),
-                ],
+                [InlineKeyboardButton(text="💳 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
+                [InlineKeyboardButton(text="💳 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
                 [InlineKeyboardButton(text="← Назад в меню", callback_data="back_to_menu")],
             ]
         ),
