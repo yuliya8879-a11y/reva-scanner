@@ -10,6 +10,9 @@
 from __future__ import annotations
 
 import logging
+import urllib.request
+import urllib.parse
+import json
 from datetime import datetime
 from typing import Any
 
@@ -31,6 +34,28 @@ _error_count: int = 0           # Счётчик ошибок
 def _all_keys() -> list[str]:
     """Все настроенные ключи в порядке приоритета."""
     return [k for k in [settings.anthropic_api_key, settings.anthropic_api_key_2] if k.strip()]
+
+
+def _notify_admin(text: str) -> None:
+    """Отправить уведомление Юлии через Telegram Bot API (без зависимостей)."""
+    try:
+        token = settings.telegram_bot_token
+        admin_id = settings.admin_telegram_id
+        if not token or not admin_id:
+            return
+        payload = json.dumps({
+            "chat_id": admin_id,
+            "text": text,
+            "parse_mode": "HTML",
+        }).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception:
+        pass  # уведомление — не критично, не ронять из-за него
 
 
 def _mask_key(key: str) -> str:
@@ -125,11 +150,26 @@ async def messages_create(**kwargs: Any) -> anthropic.types.Message:
                 if len(_switch_log) > 10:
                     _switch_log.pop(0)
                 logger.warning(msg)
+                _notify_admin(
+                    f"⚠️ <b>API ключ {attempt_idx + 1} исчерпан</b>\n\n"
+                    f"Автопереключение на Ключ {_active_index + 1}.\n"
+                    f"Бот продолжает работу.\n\n"
+                    f"Пополни баланс: console.anthropic.com → Billing"
+                )
                 continue  # повторить с новым ключом
 
             raise  # другая ошибка — поднять сразу
 
-    # Оба ключа исчерпаны
+    # Оба ключа исчерпаны — уведомить Юлю и поднять исключение
+    _notify_admin(
+        "🚨 <b>ВНИМАНИЕ! Оба API ключа исчерпаны!</b>\n\n"
+        "Бот НЕ может генерировать разборы.\n\n"
+        "Что сделать прямо сейчас:\n"
+        "1. Открыть console.anthropic.com → Billing\n"
+        "2. Пополнить баланс\n"
+        "3. Или добавить новый ключ в Railway → Variables → ANTHROPIC_API_KEY_2\n\n"
+        "Управление ключами: /api в этом боте"
+    )
     raise APIKeysExhaustedError(
         "Оба API ключа исчерпаны. Пополни баланс на console.anthropic.com"
     ) from last_exc
