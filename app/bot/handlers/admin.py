@@ -522,6 +522,59 @@ async def handle_quick_grant(callback: CallbackQuery, session: AsyncSession) -> 
         pass
 
 
+# ── Выдать мини-скан после оплаты 590 ₽ ──────────────────────────────────────
+
+@router.callback_query(lambda c: c.data and c.data.startswith("mini_grant:"))
+async def handle_mini_grant(callback: CallbackQuery, session: AsyncSession) -> None:
+    """Выдать мини-скан одной кнопкой — запускает скан у пользователя."""
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    from sqlalchemy import select as sa_select
+    parts = callback.data.split(":")
+    tg_id = int(parts[1])
+    scan_id = int(parts[2]) if len(parts) > 2 and parts[2] else 0
+
+    result = await session.execute(sa_select(User).where(User.telegram_id == tg_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    display = f"@{user.username}" if user.username else f"id:{tg_id}"
+    await callback.answer(f"✅ Мини-скан выдан: {display}", show_alert=True)
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer(f"✅ Мини-скан запущен для {display}", parse_mode="HTML")
+
+    # Уведомить пользователя — предложить ввести дату рождения
+    try:
+        if user.birth_date:
+            await callback.message.bot.send_message(
+                tg_id,
+                "✅ <b>Оплата подтверждена!</b>\n\n"
+                "Скан запускается. С чем ты сейчас?\n\n"
+                "<i>Опиши свою ситуацию или запрос — одним-двумя предложениями.</i>",
+                parse_mode="HTML",
+            )
+            # Помечаем скан как оплаченный если есть scan_id
+            if scan_id:
+                scan = await session.get(Scan, scan_id)
+                if scan:
+                    scan.is_paid = True
+                    await session.commit()
+        else:
+            await callback.message.bot.send_message(
+                tg_id,
+                "✅ <b>Оплата подтверждена!</b>\n\n"
+                "Для запуска скана нужна дата рождения.\n\n"
+                "Напиши свою дату рождения в формате <b>ДД.ММ.ГГГГ</b>:",
+                parse_mode="HTML",
+            )
+    except Exception:
+        pass
+
+
 # ── Быстрый скан для админа (кнопки "Разбор" / "Бизнес разбор") ──────────────
 
 class AdminQuickScanStates(StatesGroup):

@@ -30,7 +30,7 @@ def _admin_keyboard() -> InlineKeyboardMarkup:
             ],
             [InlineKeyboardButton(text="📊 Отчёт за сегодня", callback_data="admin_report_today")],
             [InlineKeyboardButton(text="📈 Полный отчёт + не оплатили", callback_data="admin_report_full")],
-            [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+            [InlineKeyboardButton(text="👁 Мини-скан — 590 ₽", callback_data="scan_type:mini")],
             [InlineKeyboardButton(text="👥 Все пользователи", callback_data="admin_users")],
             [InlineKeyboardButton(text="🔑 API ключи — статус/переключение", callback_data="api_status")],
         ]
@@ -44,7 +44,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="🔮 Новое личное сканирование", callback_data="buy:personal")],
                 [InlineKeyboardButton(text="💼 Новое бизнес-сканирование", callback_data="buy:business")],
                 [InlineKeyboardButton(text="🗄 Мой кабинет", callback_data="my_cabinet")],
-                [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+                [InlineKeyboardButton(text="👁 Мини-скан — 590 ₽", callback_data="scan_type:mini")],
                 [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
                 [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
                 [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
@@ -54,7 +54,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
         )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="👁 Бесплатный мини-скан", callback_data="scan_type:mini")],
+            [InlineKeyboardButton(text="👁 Мини-скан — 590 ₽", callback_data="scan_type:mini")],
             [InlineKeyboardButton(text="💳 Оплатить — Личный разбор — 3 500 ₽", callback_data="buy:personal")],
             [InlineKeyboardButton(text="💳 Оплатить — Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
             [InlineKeyboardButton(text="🗄 Мой кабинет 🔒", callback_data="my_cabinet")],

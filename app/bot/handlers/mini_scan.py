@@ -91,8 +91,8 @@ async def handle_scan_type_mini(
         "• Главный блок, который мешает расти\n"
         "• Инструменты, которые вы не используете\n"
         "• Один шаг — что сделать прямо сейчас\n\n"
-        "Это бесплатный первый разбор.\n"
-        "Следующий — уже платный и значительно глубже.\n\n"
+        "💳 <b>Стоимость мини-скана — 590 ₽</b>\n"
+        "После оплаты разбор запускается сразу.\n\n"
         "━━━━━━━━━━━━━━━━\n"
         "Разрешаете провести сканирование?",
         parse_mode="HTML",
@@ -172,32 +172,81 @@ async def handle_consent_yes(
 ) -> None:
     await callback.answer()
 
-    # Check if we already have birth_date for this user
+    from app.config import settings as _settings
+    from datetime import datetime, timezone as _tz
+
     user_service = UserService(session)
     user, _ = await user_service.get_or_create(
         telegram_id=callback.from_user.id,
         username=callback.from_user.username,
         full_name=callback.from_user.full_name,
     )
-
     await log_event(session, callback.from_user, "mini_consent_yes")
-    if user.birth_date:
-        # Already know the date — skip to request question
-        await state.update_data(birth_date=user.birth_date)
-        await state.set_state(MiniScanStates.asking_request)
-        await callback.message.answer(
-            "С чем ты сейчас? Опиши коротко свою ситуацию или запрос.\n\n"
-            "<i>Например: устала, деньги не идут — или — хочу понять куда двигаться дальше</i>",
+
+    # Админ — без оплаты
+    is_admin = _settings.admin_telegram_id and callback.from_user.id == _settings.admin_telegram_id
+    # Подписчик — без оплаты
+    has_sub = user.subscription_until and user.subscription_until > datetime.now(_tz.utc)
+
+    if is_admin or has_sub:
+        # Сразу запускаем скан
+        if user.birth_date:
+            await state.update_data(birth_date=user.birth_date)
+            await state.set_state(MiniScanStates.asking_request)
+            await callback.message.answer(
+                "С чем ты сейчас? Опиши коротко свою ситуацию или запрос.\n\n"
+                "<i>Например: устала, деньги не идут — или — хочу понять куда двигаться дальше</i>",
+                parse_mode="HTML",
+            )
+        else:
+            await state.set_state(MiniScanStates.asking_birth_date)
+            await callback.message.answer(
+                "Напиши свою дату рождения.\n\n"
+                "<b>Формат: ДД.ММ.ГГГГ</b>\n"
+                "<i>Например: 15.03.1990</i>",
+                parse_mode="HTML",
+            )
+        return
+
+    # Обычный пользователь — оплата 590 ₽
+    data = await state.get_data()
+    scan_id = data.get("scan_id")
+    user_name = callback.from_user.full_name or callback.from_user.first_name or "—"
+    user_at = f"@{callback.from_user.username}" if callback.from_user.username else f"id:{callback.from_user.id}"
+
+    # Уведомить Юлию
+    if _settings.admin_telegram_id:
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        await callback.message.bot.send_message(
+            _settings.admin_telegram_id,
+            f"💳 <b>Заявка на мини-скан — 590 ₽</b>\n\n"
+            f"👤 {user_name}  |  {user_at}\n\n"
+            f"<code>/grant_mini {callback.from_user.id}</code>",
             parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="✅ Выдать мини-скан (590 ₽)",
+                    callback_data=f"mini_grant:{callback.from_user.id}:{scan_id}"
+                )],
+                [InlineKeyboardButton(
+                    text="💬 Написать пользователю",
+                    url=f"tg://user?id={callback.from_user.id}"
+                )],
+            ]),
         )
-    else:
-        await state.set_state(MiniScanStates.asking_birth_date)
-        await callback.message.answer(
-            "Напиши свою дату рождения.\n\n"
-            "<b>Формат: ДД.ММ.ГГГГ</b>\n"
-            "<i>Например: 15.03.1990</i>",
-            parse_mode="HTML",
-        )
+
+    await state.set_state(MiniScanStates.consent)  # держим состояние до оплаты
+    await callback.message.answer(
+        "✅ <b>Заявка принята!</b>\n\n"
+        "💳 Стоимость мини-скана: <b>590 ₽</b>\n\n"
+        "Юлия получила уведомление и свяжется с вами для оплаты.\n"
+        "После подтверждения оплаты скан запустится автоматически.\n\n"
+        "Для быстрой оплаты — напишите напрямую:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Написать Юлии — оплатить", url="https://t.me/Reva_Yulya6")],
+        ]),
+    )
 
 
 @router.message(MiniScanStates.asking_birth_date)

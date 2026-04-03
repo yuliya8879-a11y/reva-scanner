@@ -183,6 +183,21 @@ async def generate_and_deliver_report(
         ),
     )
 
+    if scan_type == "personal":
+        await bot.send_message(
+            chat_id,
+            "🎁 <b>Подарок к твоему разбору</b>\n\n"
+            "Я подготовила для тебя персональную практику — "
+            "упражнение, которое поможет закрепить твой вектор и убрать главный блок.\n\n"
+            "Нажми кнопку ниже — получишь практику прямо сейчас.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🎁 Получить практику в подарок", callback_data=f"gift_practice:{scan_id}")],
+                ]
+            ),
+        )
+
 
 async def _send_question(
     bot: Bot,
@@ -550,3 +565,79 @@ async def handle_cancel_scan(
         "Скан отменён. Используйте /start чтобы начать заново."
     )
     await callback.answer()
+
+
+# ---------------------------------------------------------------------------
+# Gift practice callback — генерирует персональную практику после личного разбора
+# ---------------------------------------------------------------------------
+
+@router.callback_query(lambda c: c.data and c.data.startswith("gift_practice:"))
+async def handle_gift_practice(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    await callback.answer("Готовлю практику...")
+
+    scan_id = int(callback.data.split(":")[1])
+    scan_service = ScanService(session)
+    scan = await scan_service.get_scan(scan_id)
+
+    if not scan:
+        await callback.message.answer("Не удалось найти разбор.")
+        return
+
+    answers = scan.answers or {}
+    user_name = answers.get("name") or callback.from_user.first_name or "друг"
+    main_request = answers.get("request") or answers.get("situation") or ""
+    main_block = (scan.report or {}).get("слепые_зоны", "") if scan.report else ""
+
+    waiting = await callback.message.answer("🎁 Готовлю твою практику...")
+
+    from app.services.ai_client import messages_create
+    try:
+        response = await messages_create(
+            model="claude-opus-4-5",
+            max_tokens=1000,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ты — Юлия Рева, аналитик и коуч. Составь персональную практику для {user_name}.\n\n"
+                    f"Их запрос: {main_request}\n"
+                    f"Главный блок из разбора: {main_block}\n\n"
+                    "Практика должна быть:\n"
+                    "— конкретная, на 5-10 минут в день\n"
+                    "— телесная или письменная (дыхание, движение, или запись)\n"
+                    "— направлена на снятие именно этого блока\n"
+                    "— с чётким инструктажем: что делать, как, сколько раз\n\n"
+                    "Формат: тёплый, живой текст без списков. До 300 слов."
+                )
+            }]
+        )
+        practice_text = response.content[0].text
+    except Exception:
+        practice_text = (
+            "Практика «Точка опоры»\n\n"
+            "Каждое утро, сразу после пробуждения — 5 минут.\n\n"
+            "Сядь удобно. Положи руку на сердце.\n"
+            "Задай себе один вопрос: «Что я сейчас чувствую?»\n"
+            "Не анализируй. Просто назови это слово вслух или запиши.\n\n"
+            "Потом спроси: «Что мне сейчас нужно?»\n"
+            "И снова — одно слово. Без объяснений.\n\n"
+            "Делай это 7 дней подряд. На 7-й день перечитай все записи.\n"
+            "Ты увидишь паттерн — то, что повторяется.\n"
+            "Это и есть твоя точка входа."
+        )
+
+    try:
+        await waiting.delete()
+    except Exception:
+        pass
+
+    await callback.message.answer(
+        f"🎁 <b>Твоя персональная практика</b>\n\n{practice_text}\n\n"
+        "━━━━━━━━━━━━━━━━\n"
+        "Если хочешь разобрать практику глубже — напиши Юлии:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
+        ]),
+    )
