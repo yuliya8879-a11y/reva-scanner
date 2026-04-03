@@ -198,6 +198,19 @@ async def generate_and_deliver_report(
             ),
         )
 
+    if scan_type == "business":
+        await bot.send_message(
+            chat_id,
+            "⚠️ <b>СКОРО: ИНСТРУМЕНТЫ ДЛЯ ВНЕДРЕНИЯ — ТОЛЬКО ДЛЯ ТЕБЯ.</b>\n\n"
+            "Диагноз поставлен. Координаты известны.\n"
+            "Следующий шаг — инструменты воздействия на точку блока.\n\n"
+            "Они появятся отдельно. Это — личная работа с Юлией.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Записаться к Юлии", url="https://t.me/Reva_Yulya6")],
+            ]),
+        )
+
 
 async def _send_question(
     bot: Bot,
@@ -293,6 +306,20 @@ async def start_questionnaire_after_payment(
     if "name" not in existing_answers and telegram_first_name:
         await scan_service.save_answer(scan_id, "name", telegram_first_name)
         existing_answers["name"] = telegram_first_name
+
+    # Приветственное сообщение для бизнес-разбора
+    if scan_type == "business":
+        name = telegram_first_name or "друг"
+        await bot.send_message(
+            chat_id,
+            f"👁 <b>{name}, ты здесь. Это уже действие.</b>\n\n"
+            "Сейчас я буду работать с твоим бизнесом как с живой структурой.\n"
+            "Не с цифрами. Не с рынком. С тем, что на самом деле держит или останавливает поток.\n\n"
+            "Отвечай честно. Без украшений. Без «в целом всё норм».\n"
+            "Чем точнее данные — тем точнее диагноз.\n\n"
+            "Начинаем.",
+            parse_mode="HTML",
+        )
 
     total = get_total_questions(scan_type)
     questions = get_questions_for_type(scan_type)
