@@ -74,3 +74,85 @@ async def telegram_webhook(
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.post("/webhook/yookassa")
+async def yookassa_webhook(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Вебхук от ЮKassa — обработка успешного платежа."""
+    from app.services.yookassa_service import parse_webhook
+    from app.services.scan_service import ScanService
+    from app.services.payment_service import PaymentService
+    from app.services.user_service import UserService
+    from app.bot.handlers.full_scan import start_questionnaire_after_payment
+    from datetime import datetime, timezone, timedelta
+
+    body = await request.json()
+    logger.info("ЮKassa вебхук: %s", body.get("event"))
+
+    data = parse_webhook(body)
+    if not data or not data.get("paid"):
+        return {"ok": True}
+
+    tg_id = data["telegram_user_id"]
+    scan_id = data["scan_id"]
+    scan_type = data["scan_type"]
+
+    if not tg_id or not scan_id:
+        return {"ok": True}
+
+    # Подтвердить оплату в БД
+    payment_service = PaymentService(session)
+    await payment_service.confirm_payment(
+        telegram_charge_id=data["payment_id"],
+        scan_id=scan_id,
+    )
+
+    # Выдать подписку на 30 дней
+    user_service = UserService(session)
+    from sqlalchemy import select as sa_select
+    from app.models.user import User
+    result = await session.execute(sa_select(User).where(User.telegram_id == tg_id))
+    user = result.scalar_one_or_none()
+    if user:
+        now = datetime.now(timezone.utc)
+        user.subscription_until = now + timedelta(days=30)
+        await session.commit()
+
+    # Запустить разбор
+    try:
+        from aiogram.fsm.storage.memory import MemoryStorage
+        from aiogram.fsm.context import FSMContext
+        await start_questionnaire_after_payment(
+            bot=bot,
+            chat_id=tg_id,
+            scan_id=scan_id,
+            scan_type=scan_type,
+            state=None,
+            session=session,
+            telegram_first_name="",
+        )
+    except Exception as e:
+        logger.warning("Не удалось запустить разбор после ЮKassa: %s", e)
+        await bot.send_message(
+            tg_id,
+            "✅ <b>Оплата получена!</b>\n\n"
+            "Нажми /start чтобы начать разбор.",
+            parse_mode="HTML",
+        )
+
+    # Уведомить Юлию
+    if settings.admin_telegram_id:
+        type_label = {"mini": "Мини-скан", "personal": "Личный разбор", "business": "Бизнес-разбор"}.get(scan_type, scan_type)
+        await bot.send_message(
+            settings.admin_telegram_id,
+            f"✅ <b>Оплата через ЮKassa</b>\n\n"
+            f"👤 tg_id: {tg_id}\n"
+            f"📦 {type_label} — {data.get('amount')} ₽\n"
+            f"🔗 Payment: {data['payment_id']}",
+            parse_mode="HTML",
+        )
+
+    return {"ok": True}

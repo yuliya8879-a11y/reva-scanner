@@ -11,3 +11,4 @@ pytest
 pytest-asyncio
 aiosqlite
 anthropic>=0.49.0
+yookassa>=3.0.0

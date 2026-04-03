@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     anthropic_api_key_2: str = ""   # резервный ключ — автопереключение при исчерпании первого
     admin_telegram_id: int = 0
 
+    # ЮKassa
+    yookassa_shop_id: str = ""
+    yookassa_secret_key: str = ""
+    yookassa_test_mode: bool = True
+
     @property
     def database_url_async(self) -> str:
         url = self.database_url

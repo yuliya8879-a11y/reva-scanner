@@ -197,12 +197,50 @@ async def handle_buy_callback(
         )
         return
 
-    # Новый флоу: уведомить Юлию — пользователь хочет оплатить
+    # Флоу: ЮKassa если настроена, иначе — уведомление Юлии вручную
     price_label = "3 500 ₽" if scan_type == "personal" else "10 000 ₽"
     type_label = "личный разбор" if scan_type == "personal" else "бизнес-разбор"
     user_name = callback.from_user.full_name or callback.from_user.first_name or "—"
     user_at = f"@{callback.from_user.username}" if callback.from_user.username else f"id:{callback.from_user.id}"
 
+    from app.services.yookassa_service import is_configured, create_payment
+    if is_configured():
+        # ── ЮKassa: отправить ссылку на оплату ──────────────────────
+        try:
+            payment = create_payment(
+                scan_type=scan_type,
+                telegram_user_id=callback.from_user.id,
+                scan_id=scan.id,
+            )
+            await callback.answer()
+            await callback.message.answer(
+                f"💳 <b>Оплата {type_label}а — {price_label}</b>\n\n"
+                f"Нажми кнопку ниже — откроется страница оплаты ЮKassa.\n"
+                f"После оплаты разбор запустится автоматически.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text=f"💳 Оплатить {price_label}",
+                        url=payment["confirmation_url"]
+                    )],
+                    [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
+                ]),
+            )
+            # Уведомить Юлию
+            if settings.admin_telegram_id:
+                await callback.message.bot.send_message(
+                    settings.admin_telegram_id,
+                    f"💳 <b>Заявка на оплату (ЮKassa)</b>\n\n"
+                    f"👤 {user_name}  |  {user_at}\n"
+                    f"📦 {type_label.capitalize()} — {price_label}\n"
+                    f"🔗 Payment ID: <code>{payment['payment_id']}</code>",
+                    parse_mode="HTML",
+                )
+            return
+        except Exception as e:
+            logger.warning("ЮKassa недоступна, переключаемся на ручной режим: %s", e)
+
+    # ── Ручной режим: уведомить Юлию ────────────────────────────────
     if settings.admin_telegram_id:
         await callback.message.bot.send_message(
             settings.admin_telegram_id,
