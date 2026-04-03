@@ -259,9 +259,8 @@ async def _advance_to_next(
         scan_service = ScanService(session)
         await scan_service.complete_questionnaire(scan_id)
         await state.set_state(FullScanStates.completing)
-        await bot.send_message(chat_id, "Анкета заполнена!")
-        await state.clear()
         await generate_and_deliver_report(bot, chat_id, scan_id, scan_type, session)
+        await state.clear()
     else:
         questions = get_questions_for_type(scan_type)
         next_question = questions[next_index]
