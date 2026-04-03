@@ -613,7 +613,7 @@ async def handle_gift_practice(
 
     answers = scan.answers or {}
     user_name = answers.get("name") or callback.from_user.first_name or "друг"
-    main_request = answers.get("request") or answers.get("situation") or ""
+    main_request = answers.get("scan_request") or answers.get("request") or answers.get("situation") or ""
     main_block = (scan.report or {}).get("слепые_зоны", "") if scan.report else ""
 
     waiting = await callback.message.answer("🎁 Готовлю твою практику...")

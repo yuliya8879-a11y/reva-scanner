@@ -121,27 +121,18 @@ async def yookassa_webhook(
         user.subscription_until = now + timedelta(days=30)
         await session.commit()
 
-    # Запустить разбор
-    try:
-        from aiogram.fsm.storage.memory import MemoryStorage
-        from aiogram.fsm.context import FSMContext
-        await start_questionnaire_after_payment(
-            bot=bot,
-            chat_id=tg_id,
-            scan_id=scan_id,
-            scan_type=scan_type,
-            state=None,
-            session=session,
-            telegram_first_name="",
-        )
-    except Exception as e:
-        logger.warning("Не удалось запустить разбор после ЮKassa: %s", e)
-        await bot.send_message(
-            tg_id,
-            "✅ <b>Оплата получена!</b>\n\n"
-            "Нажми /start чтобы начать разбор.",
-            parse_mode="HTML",
-        )
+    # Отправить пользователю кнопку "Начать разбор"
+    type_label_user = {"mini": "мини-скан", "personal": "личный разбор", "business": "бизнес-разбор"}.get(scan_type, scan_type)
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    await bot.send_message(
+        tg_id,
+        f"✅ <b>Оплата получена!</b>\n\n"
+        f"Всё готово — нажми кнопку ниже чтобы начать {type_label_user}.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="▶️ Начать разбор", callback_data=f"resume_scan:{scan_id}")
+        ]]),
+    )
 
     # Уведомить Юлию
     if settings.admin_telegram_id:
