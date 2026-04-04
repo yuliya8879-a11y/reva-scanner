@@ -312,7 +312,21 @@ async def handle_successful_payment(
         logger.exception(
             "confirm_payment failed for scan_id=%s charge_id=%s", scan_id, charge_id
         )
-        await message.answer("Ошибка обработки оплаты. Пожалуйста, обратитесь в поддержку.")
+        await message.answer(
+            "❗ Ошибка обработки оплаты.\n\n"
+            "Деньги не списались или платёж завис. Юлия разберётся и поможет:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🆘 Помощь — написать Юлии", url="https://t.me/Reva_Yulya6")],
+            ]),
+        )
+        if settings.admin_telegram_id:
+            await message.bot.send_message(
+                settings.admin_telegram_id,
+                f"❗ <b>Ошибка оплаты Stars</b>\n\n"
+                f"👤 @{message.from_user.username or message.from_user.id}\n"
+                f"scan_id={scan_id}  charge_id={charge_id}",
+                parse_mode="HTML",
+            )
         return
 
     scan_service = ScanService(session)
