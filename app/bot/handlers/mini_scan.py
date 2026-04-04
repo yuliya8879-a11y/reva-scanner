@@ -213,15 +213,37 @@ async def handle_consent_yes(
             )
         return
 
-    # Обычный пользователь — оплата 590 ₽
+    # Обычный пользователь — оплата 590 ₽ через ЮKassa
     data = await state.get_data()
     scan_id = data.get("scan_id")
+
+    from app.services.yookassa_service import is_configured, create_payment as yk_create
+    if is_configured() and scan_id:
+        try:
+            payment = yk_create(
+                scan_type="mini",
+                telegram_user_id=callback.from_user.id,
+                scan_id=scan_id,
+            )
+            await state.set_state(MiniScanStates.consent)
+            await callback.message.answer(
+                "💳 <b>Оплата мини-скана — 590 ₽</b>\n\n"
+                "Нажми кнопку ниже — откроется страница оплаты.\n"
+                "После оплаты скан запустится автоматически.",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="💳 Оплатить 590 ₽", url=payment["confirmation_url"])],
+                    [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
+                ]),
+            )
+            return
+        except Exception as e:
+            logger.warning("ЮKassa недоступна для мини-скана, ручной режим: %s", e)
+
+    # Fallback: ручной режим
     user_name = callback.from_user.full_name or callback.from_user.first_name or "—"
     user_at = f"@{callback.from_user.username}" if callback.from_user.username else f"id:{callback.from_user.id}"
-
-    # Уведомить Юлию
     if _settings.admin_telegram_id:
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         await callback.message.bot.send_message(
             _settings.admin_telegram_id,
             f"💳 <b>Заявка на мини-скан — 590 ₽</b>\n\n"
@@ -229,24 +251,13 @@ async def handle_consent_yes(
             f"<code>/grant_mini {callback.from_user.id}</code>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="✅ Выдать мини-скан (590 ₽)",
-                    callback_data=f"mini_grant:{callback.from_user.id}:{scan_id}"
-                )],
-                [InlineKeyboardButton(
-                    text="💬 Написать пользователю",
-                    url=f"tg://user?id={callback.from_user.id}"
-                )],
+                [InlineKeyboardButton(text="✅ Выдать мини-скан (590 ₽)", callback_data=f"mini_grant:{callback.from_user.id}:{scan_id}")],
+                [InlineKeyboardButton(text="💬 Написать пользователю", url=f"tg://user?id={callback.from_user.id}")],
             ]),
         )
-
-    await state.set_state(MiniScanStates.consent)  # держим состояние до оплаты
+    await state.set_state(MiniScanStates.consent)
     await callback.message.answer(
-        "✅ <b>Заявка принята!</b>\n\n"
-        "💳 Стоимость мини-скана: <b>590 ₽</b>\n\n"
-        "Юлия получила уведомление и свяжется с вами для оплаты.\n"
-        "После подтверждения оплаты скан запустится автоматически.\n\n"
-        "Для быстрой оплаты — напишите напрямую:",
+        "✅ <b>Заявка принята!</b>\n\nЮлия свяжется с вами для оплаты.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="💬 Написать Юлии — оплатить", url="https://t.me/Reva_Yulya6")],
@@ -287,6 +298,52 @@ async def handle_mini_birth_date(
         "<i>Например: устала, деньги не идут — или — хочу понять куда двигаться дальше</i>",
         parse_mode="HTML",
     )
+
+
+@router.callback_query(lambda c: c.data and c.data.startswith("start_mini:"))
+async def handle_start_mini_after_payment(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    """Запускает мини-скан после подтверждения оплаты ЮKassa."""
+    await callback.answer()
+    scan_id = int(callback.data.split(":")[1])
+
+    scan_service = ScanService(session)
+    scan = await scan_service.get_scan(scan_id)
+    if not scan:
+        await callback.message.answer("Скан не найден. Напиши /start")
+        return
+
+    user_service = UserService(session)
+    user, _ = await user_service.get_or_create(
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name,
+    )
+    user_name = callback.from_user.first_name or callback.from_user.full_name or "друг"
+
+    await state.update_data(
+        scan_id=scan_id,
+        user_id=user.id,
+        user_name=user_name,
+    )
+
+    if user.birth_date:
+        await state.update_data(birth_date=user.birth_date.strftime("%d.%m.%Y"))
+        await state.set_state(MiniScanStates.asking_request)
+        await callback.message.answer(
+            "С чем ты сейчас? Опиши коротко свою ситуацию или запрос.\n\n"
+            "<i>Например: устала, деньги не идут — или — хочу понять куда двигаться дальше</i>",
+            parse_mode="HTML",
+        )
+    else:
+        await state.set_state(MiniScanStates.asking_birth_date)
+        await callback.message.answer(
+            "Напиши свою дату рождения.\n\n"
+            "<b>Формат: ДД.ММ.ГГГГ</b>\n"
+            "<i>Например: 15.03.1990</i>",
+            parse_mode="HTML",
+        )
 
 
 @router.message(MiniScanStates.asking_request)

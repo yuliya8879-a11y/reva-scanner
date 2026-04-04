@@ -125,13 +125,15 @@ async def yookassa_webhook(
     # Отправить пользователю кнопку "Начать разбор"
     type_label_user = {"mini": "мини-скан", "personal": "личный разбор", "business": "бизнес-разбор"}.get(scan_type, scan_type)
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    # Мини-скан запускается через start_mini:, полные разборы — через resume_scan:
+    start_callback = f"start_mini:{scan_id}" if scan_type == "mini" else f"resume_scan:{scan_id}"
     await bot.send_message(
         tg_id,
         f"✅ <b>Оплата получена!</b>\n\n"
         f"Всё готово — нажми кнопку ниже чтобы начать {type_label_user}.",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="▶️ Начать разбор", callback_data=f"resume_scan:{scan_id}")
+            InlineKeyboardButton(text="▶️ Начать", callback_data=start_callback)
         ]]),
     )
 
