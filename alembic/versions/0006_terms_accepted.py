@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "0006_terms_accepted"
-down_revision = "0005_feedback_messages"
+down_revision = "0005"
 branch_labels = None
 depends_on = None
 
