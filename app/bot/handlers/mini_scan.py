@@ -171,6 +171,11 @@ async def handle_consent_yes(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
     await callback.answer()
+    # Убираем кнопки сразу — защита от повторных нажатий
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     from app.config import settings as _settings
     from datetime import datetime, timezone as _tz
@@ -296,11 +301,13 @@ async def handle_mini_request(
 
 @router.callback_query(MiniScanStates.consent, lambda c: c.data == "consent:no")
 async def handle_consent_no(callback: CallbackQuery, state: FSMContext) -> None:
-    await state.clear()
-    await callback.message.answer(
-        "Хорошо. Когда будете готовы — напишите /start",
-    )
     await callback.answer()
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    await state.clear()
+    await callback.message.answer("Хорошо. Когда будете готовы — напишите /start")
 
 
 # ---------------------------------------------------------------------------
