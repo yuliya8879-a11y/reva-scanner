@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, Date, DateTime, String, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -20,6 +20,7 @@ class User(Base):
     subscription_until: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    terms_accepted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

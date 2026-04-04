@@ -122,6 +122,63 @@ _ABOUT_METHOD_TEXT = """🔍 <b>Цифровой структурный анал
 → <a href="https://t.me/Reva_Yulya6">Личная консультация — по записи</a>"""
 
 
+_OFERTA_TEXT = """📋 <b>Условия использования @Eye888888_bot</b>
+
+Перед началом работы ознакомьтесь с условиями.
+
+<b>1. Характер услуги</b>
+Сервис предоставляет информационно-аналитические материалы на основе числовых данных (дата рождения) и текстового запроса пользователя. <b>Не является</b> психологической, медицинской, консультационной или терапевтической услугой. Не требует лицензии.
+
+<b>2. Результат</b>
+Разбор — информация для самостоятельного анализа. Не является диагнозом, прогнозом, медицинским заключением или руководством к обязательному действию.
+
+<b>3. Стоимость</b>
+• Мини-скан — 590 ₽
+• Личный разбор — 3 500 ₽
+• Бизнес-разбор — 10 000 ₽
+
+<b>4. Возврат</b>
+Услуга является цифровым контентом, предоставляемым немедленно. После выдачи разбора возврат не производится (ст. 26.1 ЗоЗПП). При технической ошибке бота — повтор или возврат по обращению к @Reva_Yulya6.
+
+<b>5. Персональные данные</b>
+Сервис обрабатывает: дату рождения, имя, Telegram ID, текст запроса. Данные используются исключительно для формирования разбора и не передаются третьим лицам. Нажимая «Принимаю», вы даёте согласие на обработку персональных данных в соответствии с ФЗ-152.
+
+<b>6. Ответственность</b>
+Исполнитель не несёт ответственности за решения, принятые пользователем на основе разбора. Пользователь действует самостоятельно и осознанно.
+
+<i>ИП Рева Юлия Александровна
+ИНН: 324500804640</i>"""
+
+
+@router.callback_query(lambda c: c.data == "accept_terms")
+async def handle_accept_terms(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
+    """Пользователь принял оферту — отмечаем в БД и показываем главное меню."""
+    from app.services.user_service import UserService
+    user_service = UserService(session)
+    user, _ = await user_service.get_or_create(
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name,
+    )
+    user.terms_accepted = True
+    await session.commit()
+    await callback.answer("Спасибо!")
+
+    name = callback.from_user.first_name or "друг"
+    text = (
+        "👁 <b>Глаз Бога</b>\n\n"
+        f"Добрый день, {name}.\n\n"
+        "Это не гадание. Не предположение «попадёт — не попадёт».\n"
+        "Это <b>точное сканирование</b> вас, вашего состояния и ваших желаний — "
+        "отточенное до идеала.\n\n"
+        "Я — AI-сканер Юлии Ревы. Нахожу корень, системную ошибку, даю вектор.\n\n"
+        "Начните с <b>мини-скана</b> (590 ₽) — быстрый разбор по дате рождения."
+    )
+    await callback.message.answer(text, parse_mode="HTML", reply_markup=_main_keyboard(False))
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) -> None:
     # Пользователи с бесплатным доступом на 6 месяцев (username → месяцев)
@@ -135,6 +192,18 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
         username=message.from_user.username,
         full_name=message.from_user.full_name,
     )
+
+    # Если пользователь ещё не принял оферту — показываем её первой
+    if not user.terms_accepted:
+        await message.answer(
+            _OFERTA_TEXT,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Принимаю условия", callback_data="accept_terms")],
+                [InlineKeyboardButton(text="📋 Политика конфиденциальности", url="https://t.me/Eye888888_bot")],
+            ]),
+        )
+        return
 
     # Автовыдача подписки при первом /start
     uname = (message.from_user.username or "").lower()
