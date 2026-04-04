@@ -1,0 +1,4 @@
+[2026-03-30T00:00:00Z] SEVERITY=CRITICAL TYPE=subscription_bypass DESCRIPTION=Пользователи с подпиской (6 месяцев) вызывали _admin_generate_report минуя опросник — scan_request никогда не запрашивался → генерировался пустой разбор RESOLVED=yes
+[2026-03-30T00:00:00Z] SEVERITY=WARNING TYPE=stuck_scans DESCRIPTION=19 сканов в collecting/in_progress очищены через UPDATE scans SET status=failed WHERE status IN ('collecting','in_progress') AND created_at < NOW()-INTERVAL '1h' RESOLVED=yes
+[2026-03-30T00:00:00Z] SEVERITY=WARNING TYPE=wrong_button_prices DESCRIPTION=Кнопки после мини-скана показывали 3500⭐ и 7000⭐ вместо 3500₽ и 10000₽ RESOLVED=yes
+[2026-03-30T00:00:00Z] SEVERITY=WARNING TYPE=resume_crash DESCRIPTION=handle_resume_scan пытался getattr(FullScanStates,'q15') если все вопросы заполнены но AI упал → AttributeError RESOLVED=yes
