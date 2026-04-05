@@ -50,6 +50,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
                 [InlineKeyboardButton(text="🆘 Помощь / сообщить об ошибке", callback_data="help_request")],
                 [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
+                [InlineKeyboardButton(text="📋 Оферта и условия использования", callback_data="view_oferta")],
             ]
         )
     return InlineKeyboardMarkup(
@@ -63,6 +64,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
             [InlineKeyboardButton(text="🆘 Помощь / сообщить об ошибке", callback_data="help_request")],
             [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
+            [InlineKeyboardButton(text="📋 Оферта и условия использования", callback_data="view_oferta")],
         ]
     )
 
@@ -164,7 +166,13 @@ async def handle_accept_terms(
     )
     user.terms_accepted = True
     await session.commit()
-    await callback.answer("Спасибо!")
+    await callback.answer("Спасибо! Добро пожаловать.")
+
+    # Убираем кнопки с сообщения оферты, чтобы нельзя было нажать повторно
+    try:
+        await callback.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
     name = callback.from_user.first_name or "друг"
     text = (
@@ -174,7 +182,9 @@ async def handle_accept_terms(
         "Это <b>точное сканирование</b> вас, вашего состояния и ваших желаний — "
         "отточенное до идеала.\n\n"
         "Я — AI-сканер Юлии Ревы. Нахожу корень, системную ошибку, даю вектор.\n\n"
-        "Начните с <b>мини-скана</b> (590 ₽) — быстрый разбор по дате рождения."
+        "Начните с <b>мини-скана</b> (590 ₽) — быстрый разбор по дате рождения.\n\n"
+        "<i>Оплачивая скан, вы соглашаетесь с условиями оферты. "
+        "Ознакомиться можно по кнопке ниже.</i>"
     )
     await callback.message.answer(text, parse_mode="HTML", reply_markup=_main_keyboard(False))
 
@@ -256,7 +266,9 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
             "Это <b>точное сканирование</b> вас, вашего состояния и ваших желаний — "
             "отточенное до идеала.\n\n"
             "Я — AI-сканер Юлии Ревы. Нахожу корень, системную ошибку, даю вектор.\n\n"
-            "Начните с <b>мини-скана</b> (590 ₽) — быстрый разбор по дате рождения и запросу."
+            "Начните с <b>мини-скана</b> (590 ₽) — быстрый разбор по дате рождения и запросу.\n\n"
+            "<i>Оплачивая скан, вы соглашаетесь с условиями сканирования. "
+            "Ознакомиться с офертой можно по кнопке внизу.</i>"
         )
     else:
         text = (
@@ -325,6 +337,21 @@ async def handle_back_to_menu(callback: CallbackQuery, state: FSMContext) -> Non
     await callback.message.answer(
         "👁 Выберите формат:",
         reply_markup=_main_keyboard(),
+    )
+
+
+@router.callback_query(lambda c: c.data == "view_oferta")
+async def handle_view_oferta(callback: CallbackQuery) -> None:
+    """Показать оферту по кнопке из меню."""
+    await callback.answer()
+    await callback.message.answer(
+        _OFERTA_TEXT,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="← Назад в меню", callback_data="back_to_menu")],
+            ]
+        ),
     )
 
 
