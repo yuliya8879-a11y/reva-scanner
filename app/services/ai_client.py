@@ -60,7 +60,7 @@ def _load_keys() -> None:
 
     # 2. Из .env как fallback
     if not keys:
-        for attr in ("anthropic_api_key", "anthropic_api_key_2"):
+        for attr in ("anthropic_api_key", "anthropic_api_key_2", "anthropic_api_key_3"):
             val = getattr(settings, attr, "")
             if val and val.strip():
                 keys.append(val.strip())
@@ -136,6 +136,8 @@ def get_status() -> dict[str, Any]:
         "key_1_mask": _mask(keys[0]) if len(keys) >= 1 else "не задан",
         "key_2_set": len(keys) >= 2 and bool(keys[1]),
         "key_2_mask": _mask(keys[1]) if len(keys) >= 2 else "не задан",
+        "key_3_set": len(keys) >= 3 and bool(keys[2]),
+        "key_3_mask": _mask(keys[2]) if len(keys) >= 3 else "не задан",
         "call_count": _call_count,
         "error_count": _error_count,
         "switch_log": _switch_log[-5:],

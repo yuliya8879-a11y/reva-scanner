@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str
     anthropic_api_key: str = ""
     anthropic_api_key_2: str = ""   # резервный ключ — автопереключение при исчерпании первого
+    anthropic_api_key_3: str = ""   # третий резервный ключ
     admin_telegram_id: int = 0
 
     # ЮKassa

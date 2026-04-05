@@ -1138,17 +1138,20 @@ async def broadcast_confirm(message: Message, state: FSMContext, session: AsyncS
 class ApiKeyStates(StatesGroup):
     waiting_key_1 = State()
     waiting_key_2 = State()
+    waiting_key_3 = State()
 
 
 def _api_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="🟢 Ключ 1 (основной)", callback_data="api_switch:0"),
-            InlineKeyboardButton(text="🔵 Ключ 2 (резерв)", callback_data="api_switch:1"),
+            InlineKeyboardButton(text="🟢 Ключ 1", callback_data="api_switch:0"),
+            InlineKeyboardButton(text="🔵 Ключ 2", callback_data="api_switch:1"),
+            InlineKeyboardButton(text="🟣 Ключ 3", callback_data="api_switch:2"),
         ],
         [
-            InlineKeyboardButton(text="✏️ Вставить Ключ 1", callback_data="api_set:1"),
-            InlineKeyboardButton(text="✏️ Вставить Ключ 2", callback_data="api_set:2"),
+            InlineKeyboardButton(text="✏️ Ключ 1", callback_data="api_set:1"),
+            InlineKeyboardButton(text="✏️ Ключ 2", callback_data="api_set:2"),
+            InlineKeyboardButton(text="✏️ Ключ 3", callback_data="api_set:3"),
         ],
         [InlineKeyboardButton(text="🔄 Обновить", callback_data="api_status")],
     ])
@@ -1159,14 +1162,20 @@ def _api_status_text() -> str:
     active = s["active_key"]
     k1 = f"{'✅' if s['key_1_set'] else '❌'} Ключ 1: {s['key_1_mask']}"
     k2 = f"{'✅' if s['key_2_set'] else '❌'} Ключ 2: {s['key_2_mask']}"
-    indicator = f"{'🟢' if active == 1 else '⚪'} Ключ 1    {'🟢' if active == 2 else '⚪'} Ключ 2"
+    k3 = f"{'✅' if s['key_3_set'] else '❌'} Ключ 3: {s['key_3_mask']}"
+    indicator = (
+        f"{'🟢' if active == 1 else '⚪'} Ключ 1    "
+        f"{'🟢' if active == 2 else '⚪'} Ключ 2    "
+        f"{'🟢' if active == 3 else '⚪'} Ключ 3"
+    )
 
     log_lines = "\n".join(s["switch_log"]) if s["switch_log"] else "Переключений не было"
 
     return (
         f"🔑 <b>API ключи Anthropic</b>\n\n"
         f"{k1}\n"
-        f"{k2}\n\n"
+        f"{k2}\n"
+        f"{k3}\n\n"
         f"<b>Активный:</b> {indicator}\n\n"
         f"📊 Вызовов: {s['call_count']} | Ошибок: {s['error_count']}\n\n"
         f"<b>История переключений:</b>\n{log_lines}\n\n"
@@ -1220,8 +1229,10 @@ async def handle_api_set_start(callback: CallbackQuery, state: FSMContext) -> No
     await callback.answer()
     if slot == 1:
         await state.set_state(ApiKeyStates.waiting_key_1)
-    else:
+    elif slot == 2:
         await state.set_state(ApiKeyStates.waiting_key_2)
+    else:
+        await state.set_state(ApiKeyStates.waiting_key_3)
     await callback.message.answer(
         f"🔑 <b>Вставь новый Ключ {slot}</b>\n\n"
         f"Скопируй ключ из console.anthropic.com → API Keys\n"
@@ -1261,6 +1272,24 @@ async def handle_api_key_2_input(message: Message, state: FSMContext) -> None:
     if add_or_replace_key(2, key):
         await message.answer(
             "✅ <b>Ключ 2 обновлён!</b>\n\nБот уже использует новый ключ.",
+            parse_mode="HTML",
+        )
+        await message.answer(_api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard())
+    else:
+        await message.answer(
+            "❌ Неверный формат. Ключ должен начинаться с <code>sk-ant-</code>",
+            parse_mode="HTML",
+        )
+
+
+@router.message(ApiKeyStates.waiting_key_3)
+async def handle_api_key_3_input(message: Message, state: FSMContext) -> None:
+    """Получить новый Ключ 3 и сохранить."""
+    await state.clear()
+    key = (message.text or "").strip()
+    if add_or_replace_key(3, key):
+        await message.answer(
+            "✅ <b>Ключ 3 обновлён!</b>\n\nБот уже использует новый ключ.",
             parse_mode="HTML",
         )
         await message.answer(_api_status_text(), parse_mode="HTML", reply_markup=_api_keyboard())
