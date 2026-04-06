@@ -152,6 +152,41 @@ _OFERTA_TEXT = """📋 <b>Условия использования @Eye888888_b
 ИНН: 324500804640</i>"""
 
 
+_PRIVACY_TEXT = """🔒 <b>Политика конфиденциальности @Eye888888_bot</b>
+
+<b>Кто мы:</b> ИП Рева Юлия Васильевна, ИНН 324500804640
+
+<b>Что собираем:</b>
+· Telegram ID и username — для идентификации
+· Имя — для персонализации разбора
+· Дата рождения — основа анализа
+· Текст запроса — для генерации разбора
+
+<b>Не собираем:</b> телефон, email, геолокацию, данные карт.
+
+<b>Не передаём</b> данные третьим лицам и не продаём их.
+
+<b>Ваши права (ФЗ-152):</b>
+· Получить копию данных
+· Исправить или удалить данные
+· Отозвать согласие
+
+По всем вопросам: @Reva_Yulya6"""
+
+
+@router.callback_query(lambda c: c.data == "view_privacy")
+async def handle_view_privacy(callback: CallbackQuery) -> None:
+    """Показать политику конфиденциальности."""
+    await callback.answer()
+    await callback.message.answer(
+        _PRIVACY_TEXT,
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="← Назад", callback_data="back_to_menu")],
+        ]),
+    )
+
+
 @router.callback_query(lambda c: c.data == "accept_terms")
 async def handle_accept_terms(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
@@ -210,7 +245,7 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Принимаю условия", callback_data="accept_terms")],
-                [InlineKeyboardButton(text="📋 Политика конфиденциальности", url="https://t.me/Eye888888_bot")],
+                [InlineKeyboardButton(text="🔒 Политика конфиденциальности", callback_data="view_privacy")],
             ]),
         )
         return
