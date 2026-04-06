@@ -1,14 +1,13 @@
-"""Payment handlers: Telegram Stars invoice flow for full scan purchases."""
+"""Payment handlers: единственный метод оплаты — ЮKassa."""
 
 from __future__ import annotations
 
 import logging
-import os
 from datetime import date, datetime, timezone
 
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, PreCheckoutQuery
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aiogram import Bot
@@ -46,9 +45,7 @@ async def _admin_generate_report(
         "🔓 Тестовый доступ активирован.\n🔮 Генерирую полный разбор... Это займёт около 30 секунд."
     )
     try:
-        # Берём реальную дату рождения из профиля если есть, иначе заглушка
         from app.models.user import User as UserModel
-        from sqlalchemy import select as sa_select
         from app.models.scan import Scan as ScanModel
         scan_row = await session.get(ScanModel, scan_id)
         real_user = await session.get(UserModel, scan_row.user_id) if scan_row else None
@@ -70,7 +67,6 @@ async def _admin_generate_report(
 
         await scanning_msg.delete()
 
-        # Нумерология
         num = report.get("numerology", {})
         await bot.send_message(
             chat_id,
@@ -80,7 +76,6 @@ async def _admin_generate_report(
             parse_mode="Markdown",
         )
 
-        # 6 блоков — каждый отдельным сообщением
         for key in BLOCK_KEYS:
             label = _BLOCK_LABELS[key]
             content = report.get(key, "недостаточно данных для анализа этого аспекта")
@@ -90,12 +85,9 @@ async def _admin_generate_report(
                 parse_mode="Markdown",
             )
 
-        # Soft closing
         await bot.send_message(
             chat_id,
-            "Это твой разбор.\n\n"
-            "Пусть осядет.\n\n"
-            "Если что-то отозвалось — или хочешь разобрать глубже — "
+            "Это твой разбор.\n\nПусть осядет.\n\nЕсли что-то отозвалось — или хочешь разобрать глубже — "
             "напиши мне лично. Я отвечаю.",
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
@@ -120,27 +112,20 @@ async def _admin_generate_report(
             ]),
         )
 
+
 router = Router(name="payment")
 
-STARS_PRICE_PERSONAL = int(os.getenv("STARS_PRICE_PERSONAL", "3500"))
-STARS_PRICE_BUSINESS = int(os.getenv("STARS_PRICE_BUSINESS", "7000"))
-
-# Оплата временно приостановлена — True пока не подключён банк
-PAYMENT_PAUSED = os.getenv("PAYMENT_PAUSED", "true").lower() == "true"
-
 
 # ---------------------------------------------------------------------------
-# Handler 1: buy:personal / buy:business callback — create scan, send invoice
+# buy:personal / buy:business — создать скан и выслать ссылку ЮKassa
 # ---------------------------------------------------------------------------
-
 
 @router.callback_query(lambda c: c.data in ("buy:personal", "buy:business"))
 async def handle_buy_callback(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
-    """Intercept buy callbacks from upsell, create Payment row, send Stars invoice."""
+    """Создать скан и выслать ссылку на оплату через ЮKassa."""
     scan_type = callback.data.split(":")[1]  # "personal" or "business"
-    stars = STARS_PRICE_PERSONAL if scan_type == "personal" else STARS_PRICE_BUSINESS
 
     user_service = UserService(session)
     user, _ = await user_service.get_or_create(
@@ -149,11 +134,12 @@ async def handle_buy_callback(
         full_name=callback.from_user.full_name,
     )
 
-    # Проверка активной подписки — пропускаем оплату
+    # Активная подписка или админ — пропускаем оплату
     has_subscription = (
         user.subscription_until is not None
         and user.subscription_until > datetime.now(timezone.utc)
     )
+    is_admin = settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id
 
     scan_service = ScanService(session)
     existing = await scan_service.get_incomplete_scan(user.id)
@@ -172,19 +158,17 @@ async def handle_buy_callback(
     await payment_service.create_payment(
         user_id=user.id,
         scan_id=scan.id,
-        amount_stars=stars,
+        amount_stars=0,
         product_type=scan_type,
     )
 
-    # Подписка / админ — подтверждаем без оплаты, но ведём через опросник (нужен запрос!)
-    is_admin = settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id
+    # Бесплатный доступ для админа / подписчика
     if is_admin or has_subscription:
         await payment_service.confirm_payment(
             telegram_charge_id="free_access",
             scan_id=scan.id,
         )
         await callback.answer()
-        # Импорт здесь — избегаем циклической зависимости
         from app.bot.handlers.full_scan import start_questionnaire_after_payment
         await start_questionnaire_after_payment(
             bot=callback.message.bot,
@@ -197,156 +181,66 @@ async def handle_buy_callback(
         )
         return
 
-    # Флоу: ЮKassa если настроена, иначе — уведомление Юлии вручную
+    # ── ЮKassa — единственный метод оплаты ──────────────────────────
     price_label = "3 500 ₽" if scan_type == "personal" else "10 000 ₽"
     type_label = "личный разбор" if scan_type == "personal" else "бизнес-разбор"
     user_name = callback.from_user.full_name or callback.from_user.first_name or "—"
     user_at = f"@{callback.from_user.username}" if callback.from_user.username else f"id:{callback.from_user.id}"
 
-    from app.services.yookassa_service import is_configured, create_payment
-    if is_configured():
-        # ── ЮKassa: отправить ссылку на оплату ──────────────────────
-        try:
-            payment = create_payment(
-                scan_type=scan_type,
-                telegram_user_id=callback.from_user.id,
-                scan_id=scan.id,
-            )
-            await callback.answer()
-            await callback.message.answer(
-                f"💳 <b>Оплата {type_label}а — {price_label}</b>\n\n"
-                f"Нажми кнопку ниже — откроется страница оплаты ЮKassa.\n"
-                f"После оплаты разбор запустится автоматически.",
-                parse_mode="HTML",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(
-                        text=f"💳 Оплатить {price_label}",
-                        url=payment["confirmation_url"]
-                    )],
-                    [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
-                ]),
-            )
-            # Уведомить Юлию
-            if settings.admin_telegram_id:
-                await callback.message.bot.send_message(
-                    settings.admin_telegram_id,
-                    f"💳 <b>Заявка на оплату (ЮKassa)</b>\n\n"
-                    f"👤 {user_name}  |  {user_at}\n"
-                    f"📦 {type_label.capitalize()} — {price_label}\n"
-                    f"🔗 Payment ID: <code>{payment['payment_id']}</code>",
-                    parse_mode="HTML",
-                )
-            return
-        except Exception as e:
-            logger.warning("ЮKassa недоступна, переключаемся на ручной режим: %s", e)
-
-    # ── Ручной режим: уведомить Юлию ────────────────────────────────
-    if settings.admin_telegram_id:
-        await callback.message.bot.send_message(
-            settings.admin_telegram_id,
-            f"💳 <b>Новая заявка на оплату</b>\n\n"
-            f"👤 {user_name}  |  {user_at}\n"
-            f"📦 {type_label.capitalize()} — {price_label}\n\n"
-            f"<code>/grant {callback.from_user.id} {scan_type}</code>",
+    from app.services.yookassa_service import create_payment
+    try:
+        payment = create_payment(
+            scan_type=scan_type,
+            telegram_user_id=callback.from_user.id,
+            scan_id=scan.id,
+        )
+        await callback.answer()
+        await callback.message.answer(
+            f"💳 <b>Оплата — {type_label} — {price_label}</b>\n\n"
+            f"Нажми кнопку ниже — откроется страница оплаты.\n"
+            f"После оплаты разбор запустится автоматически.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
-                    text=f"✅ Выдать доступ ({price_label})",
-                    callback_data=f"quick_grant:{callback.from_user.id}:{scan_type}"
+                    text=f"💳 Оплатить {price_label}",
+                    url=payment["confirmation_url"]
                 )],
-                [InlineKeyboardButton(
-                    text="💬 Написать пользователю",
-                    url=f"tg://user?id={callback.from_user.id}"
-                )],
-            ]),
-        )
-
-    await callback.answer()
-    await callback.message.answer(
-        f"✅ <b>Заявка принята!</b>\n\n"
-        f"Юлия получила уведомление и свяжется с вами для оплаты.\n\n"
-        f"После подтверждения оплаты вам откроется доступ к <b>{type_label}у</b>.\n\n"
-        f"Если хотите ускорить — напишите напрямую:",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")
-        ]]),
-    )
-
-
-# ---------------------------------------------------------------------------
-# Handler 2: pre_checkout_query — must answer within 10 seconds, no DB work
-# ---------------------------------------------------------------------------
-
-
-@router.pre_checkout_query()
-async def handle_pre_checkout_query(query: PreCheckoutQuery) -> None:
-    """Answer pre-checkout query immediately. No database work allowed here."""
-    await query.answer(ok=True)
-
-
-# ---------------------------------------------------------------------------
-# Handler 3: successful_payment — confirm payment, guard on is_paid, start scan
-# ---------------------------------------------------------------------------
-
-
-@router.message(F.successful_payment)
-async def handle_successful_payment(
-    message: Message, state: FSMContext, session: AsyncSession
-) -> None:
-    """Process confirmed Telegram Stars payment and launch the full scan questionnaire."""
-    charge_id = message.successful_payment.telegram_payment_charge_id
-    payload = message.successful_payment.invoice_payload  # "scan:{scan_id}:user:{user_id}"
-
-    parts = payload.split(":")
-    # payload format: scan:{scan_id}:user:{user_id}
-    scan_id = int(parts[1])
-
-    payment_service = PaymentService(session)
-    try:
-        await payment_service.confirm_payment(
-            telegram_charge_id=charge_id,
-            scan_id=scan_id,
-        )
-    except Exception:
-        logger.exception(
-            "confirm_payment failed for scan_id=%s charge_id=%s", scan_id, charge_id
-        )
-        await message.answer(
-            "❗ Ошибка обработки оплаты.\n\n"
-            "Деньги не списались или платёж завис. Юлия разберётся и поможет:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🆘 Помощь — написать Юлии", url="https://t.me/Reva_Yulya6")],
+                [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
             ]),
         )
         if settings.admin_telegram_id:
-            await message.bot.send_message(
+            await callback.message.bot.send_message(
                 settings.admin_telegram_id,
-                f"❗ <b>Ошибка оплаты Stars</b>\n\n"
-                f"👤 @{message.from_user.username or message.from_user.id}\n"
-                f"scan_id={scan_id}  charge_id={charge_id}",
+                f"💳 <b>Новый платёж (ЮKassa)</b>\n\n"
+                f"👤 {user_name}  |  {user_at}\n"
+                f"📦 {type_label.capitalize()} — {price_label}\n"
+                f"🔗 Payment ID: <code>{payment['payment_id']}</code>",
                 parse_mode="HTML",
             )
-        return
-
-    scan_service = ScanService(session)
-    scan = await scan_service.get_scan(scan_id)
-    if scan is None or not scan.is_paid:
-        logger.error("Scan not marked paid after confirm for scan_id=%s", scan_id)
-        await message.answer("Ошибка: скан не найден. Обратитесь в поддержку.")
-        return
-
-    await message.answer("Оплата получена! Запускаем скан.")
-
-    # Deferred import to avoid circular dependency at module load time
-    from app.bot.handlers.full_scan import start_questionnaire_after_payment
-
-    await start_questionnaire_after_payment(
-        bot=message.bot,
-        chat_id=message.chat.id,
-        scan_id=scan_id,
-        scan_type=scan.scan_type,
-        state=state,
-        session=session,
-        telegram_first_name=message.from_user.first_name or "",
-    )
+    except Exception as e:
+        logger.exception("ЮKassa ошибка для scan_id=%s: %s", scan.id, e)
+        await callback.answer()
+        await callback.message.answer(
+            "⚠️ Платёжная система временно недоступна.\n\n"
+            "Напишите Юлии — она поможет оформить вручную:",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
+            ]),
+        )
+        if settings.admin_telegram_id:
+            await callback.message.bot.send_message(
+                settings.admin_telegram_id,
+                f"❗ <b>Ошибка ЮKassa</b>\n\n"
+                f"👤 {user_name}  |  {user_at}\n"
+                f"📦 {type_label.capitalize()} — {price_label}\n"
+                f"Ошибка: {e}\n\n"
+                f"Выдать вручную:",
+                parse_mode="HTML",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(
+                        text=f"✅ Выдать доступ ({price_label})",
+                        callback_data=f"quick_grant:{callback.from_user.id}:{scan_type}"
+                    )],
+                ]),
+            )
