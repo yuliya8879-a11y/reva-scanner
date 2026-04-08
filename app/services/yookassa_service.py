@@ -52,10 +52,12 @@ def create_payment(
     telegram_user_id: int,
     scan_id: int,
     return_url: str = "https://t.me/Eye888888_bot",
+    amount: int | None = None,
 ) -> dict:
     """
     Создать платёж в ЮKassa.
 
+    amount — переопределяет стандартную цену (для скидок).
     Возвращает: {"payment_id": str, "confirmation_url": str, "status": str}
     """
     if not is_configured():
@@ -64,7 +66,7 @@ def create_payment(
     _get_configuration()
     from yookassa import Payment
 
-    amount = PRICES.get(scan_type, 3500)
+    amount = amount if amount is not None else PRICES.get(scan_type, 3500)
     description = DESCRIPTIONS.get(scan_type, "Разбор «Глаз Бога»")
     idempotence_key = str(uuid.uuid4())
 
