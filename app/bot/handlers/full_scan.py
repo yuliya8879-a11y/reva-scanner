@@ -187,7 +187,7 @@ async def generate_and_deliver_report(
             inline_keyboard=[
                 [InlineKeyboardButton(text="💬 Есть вопрос по разбору", url="https://t.me/Reva_Yulya6")],
                 [InlineKeyboardButton(text="🔮 Хочу личную сессию с Юлией", callback_data="request_session")],
-                [InlineKeyboardButton(text="⭐ Оставить отзыв", url="https://t.me/Reva_mentor")],
+                [InlineKeyboardButton(text="⭐ Отзыв — канал Eye Scan", url="https://t.me/Reva_mentor")],
             ]
         ),
     )
@@ -376,10 +376,10 @@ async def handle_keyboard_answer(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
     """Handle inline keyboard answers. Callback data format: fq:{key}:{value}"""
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     # Parse fq:{key}:{value} — key may not contain colon, value might
     parts = callback.data.split(":", 2)
     if len(parts) < 3:
-        await callback.answer()
         return
 
     key = parts[1]
@@ -408,7 +408,6 @@ async def handle_keyboard_answer(
         bot=callback.message.bot,
         chat_id=callback.message.chat.id,
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +420,7 @@ async def handle_skip_answer(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
     """Handle skip button for optional questions. Saves empty string."""
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     key = callback.data[len("fq_skip:"):]
 
     data = await state.get_data()
@@ -446,7 +446,6 @@ async def handle_skip_answer(
         bot=callback.message.bot,
         chat_id=callback.message.chat.id,
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -523,6 +522,7 @@ async def handle_resume_scan(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
     """Resume an incomplete scan from the exact question where user left off."""
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     scan_id = int(callback.data.split(":")[1])
 
     scan_service = ScanService(session)
@@ -530,7 +530,6 @@ async def handle_resume_scan(
 
     if scan is None:
         await callback.message.answer("Скан не найден. Используйте /start чтобы начать заново.")
-        await callback.answer()
         return
 
     scan_type = scan.scan_type
@@ -554,7 +553,6 @@ async def handle_resume_scan(
             current_index=current_index,
         )
         await state.clear()
-        await callback.answer()
         await generate_and_deliver_report(
             callback.message.bot, callback.message.chat.id, scan.id, scan_type, session
         )
@@ -573,7 +571,6 @@ async def handle_resume_scan(
     question = questions[current_index]
 
     await _send_question(callback.message.bot, callback.message.chat.id, question, current_index, total)
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -586,6 +583,7 @@ async def handle_cancel_scan(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
     """Cancel an incomplete scan and let user start fresh."""
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     scan_id = int(callback.data.split(":")[1])
 
     scan_service = ScanService(session)
@@ -599,7 +597,6 @@ async def handle_cancel_scan(
     await callback.message.answer(
         "Скан отменён. Используйте /start чтобы начать заново."
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------

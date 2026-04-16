@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -162,21 +163,32 @@ def _is_quota_error(e: Exception) -> bool:
 
 
 def _notify_admin(text: str) -> None:
-    """Отправить сообщение Юлии через Telegram без aiogram."""
+    """Отправить сообщение Юлии через Telegram без aiogram.
+    Запускается в thread pool чтобы не блокировать async event loop.
+    """
+    def _send() -> None:
+        try:
+            token = settings.telegram_bot_token
+            admin_id = settings.admin_telegram_id
+            if not token or not admin_id:
+                return
+            payload = json.dumps({"chat_id": admin_id, "text": text, "parse_mode": "HTML"}).encode()
+            req = urllib.request.Request(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+
+    # Запускаем в фоне — не блокируем event loop
     try:
-        token = settings.telegram_bot_token
-        admin_id = settings.admin_telegram_id
-        if not token or not admin_id:
-            return
-        payload = json.dumps({"chat_id": admin_id, "text": text, "parse_mode": "HTML"}).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        urllib.request.urlopen(req, timeout=5)
-    except Exception:
-        pass
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _send)
+    except RuntimeError:
+        # Нет event loop (вызов вне async контекста) — запускаем напрямую
+        _send()
 
 
 # ── Основная функция с failover ───────────────────────────────────────────────

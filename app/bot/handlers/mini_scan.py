@@ -30,7 +30,7 @@ def _post_scan_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🔮 Личный разбор — 3 500 ₽", callback_data="buy:personal")],
             [InlineKeyboardButton(text="💼 Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
-            [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
+            [InlineKeyboardButton(text="📺 Канал Eye Scan", url="https://t.me/Reva_mentor")],
             [InlineKeyboardButton(text="💬 Написать Юлии", url="https://t.me/Reva_Yulya6")],
         ]
     )
@@ -52,6 +52,7 @@ def _support_keyboard() -> InlineKeyboardMarkup:
 async def handle_scan_type_mini(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     user_service = UserService(session)
     user, _ = await user_service.get_or_create(
         telegram_id=callback.from_user.id,
@@ -98,13 +99,13 @@ async def handle_scan_type_mini(
         parse_mode="HTML",
         reply_markup=consent_keyboard,
     )
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data in ("scan_type:personal", "scan_type:business"))
 async def handle_scan_type_paid(
     callback: CallbackQuery, state: FSMContext, session: AsyncSession
 ) -> None:
+    await callback.answer()  # сразу убираем "загрузку" с кнопки
     from app.config import settings
     from app.models.scan import ScanStatus
     from app.bot.handlers.payment import _admin_generate_report
@@ -124,8 +125,6 @@ async def handle_scan_type_paid(
             await callback.message.edit_reply_markup(reply_markup=None)
         except Exception:
             pass
-
-        await callback.answer()
 
         user_service = UserService(session)
         user, _ = await user_service.get_or_create(
@@ -159,7 +158,6 @@ async def handle_scan_type_paid(
         "Для платного сканирования сначала пройдите бесплатный мини-скан.\n\n"
         "Нажмите «Бесплатный мини-скан» ниже."
     )
-    await callback.answer()
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +442,7 @@ async def _generate_and_send_report(
             reply_markup=InlineKeyboardMarkup(
                 inline_keyboard=[
                     [InlineKeyboardButton(text="🔮 Хочу личную сессию с Юлией", callback_data="request_session")],
-                    [InlineKeyboardButton(text="⭐ Поделиться впечатлением", url="https://t.me/Reva_mentor")],
+                    [InlineKeyboardButton(text="⭐ Впечатление — канал Eye Scan", url="https://t.me/Reva_mentor")],
                 ]
             ),
         )
