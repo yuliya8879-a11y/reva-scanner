@@ -6,9 +6,12 @@ from aiogram import Router
 from aiogram.filters import CommandStart, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.scan import Scan
+from app.models.user import User
 from app.services.event_service import log_event
 from app.services.scan_service import ScanService
 from app.services.user_service import UserService
@@ -21,18 +24,95 @@ _SCAN_TYPE_LABELS = {
 }
 
 
+async def _admin_dashboard_text(session: AsyncSession) -> str:
+    """Живая сводка для главного экрана админа."""
+    from app.models.scan import ScanStatus
+    from app.models.payment import Payment
+
+    now = _dt.now(_tz.utc)
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - _td(days=7)
+
+    total_users = await session.scalar(select(func.count()).select_from(User)) or 0
+    new_today = await session.scalar(
+        select(func.count()).select_from(User).where(User.created_at >= today)
+    ) or 0
+    new_week = await session.scalar(
+        select(func.count()).select_from(User).where(User.created_at >= week_ago)
+    ) or 0
+
+    scans_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.created_at >= today, Scan.status == ScanStatus.completed.value)
+    ) or 0
+
+    paid_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= today)
+    ) or 0
+    paid_week = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.is_paid.is_(True), Scan.created_at >= week_ago)
+    ) or 0
+
+    paid_personal = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "personal", Scan.is_paid.is_(True))
+    ) or 0
+    paid_business = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "business", Scan.is_paid.is_(True))
+    ) or 0
+    revenue = paid_personal * 3500 + paid_business * 10000
+
+    pending_count = await session.scalar(
+        select(func.count()).select_from(Payment).where(Payment.status == "pending")
+    ) or 0
+
+    pending_line = (
+        f"⚠️ Не оплатили: <b>{pending_count} чел.</b> — нажми кнопку ниже"
+        if pending_count else "✅ Все заявки закрыты"
+    )
+
+    new_week_line = f"+{new_week} за неделю" if new_week else "новых за неделю нет"
+
+    return (
+        f"👁 <b>Глаз Бога — панель Юлии</b>\n"
+        f"<i>{now.strftime('%d.%m.%Y  %H:%M')} UTC</i>\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"👥 Пользователей: <b>{total_users}</b>\n"
+        f"   Новых сегодня: <b>{new_today}</b>  ({new_week_line})\n\n"
+        f"🔍 Сканов завершено сегодня: <b>{scans_today}</b>\n\n"
+        f"💰 Оплат сегодня: <b>{paid_today}</b>\n"
+        f"   За 7 дней: <b>{paid_week}</b>\n"
+        f"   Личных: {paid_personal} × 3 500 ₽  |  Бизнес: {paid_business} × 10 000 ₽\n"
+        f"   💵 Доход всего: <b>{revenue:,} ₽</b>\n\n"
+        f"{pending_line}\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+    )
+
+
 def _admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            # ── Отчёты ──────────────────────────────────────────────
             [
-                InlineKeyboardButton(text="🔮 Разбор", callback_data="admin_scan:personal"),
-                InlineKeyboardButton(text="💼 Бизнес разбор", callback_data="admin_scan:business"),
+                InlineKeyboardButton(text="📊 Сегодня", callback_data="admin_report_today"),
+                InlineKeyboardButton(text="📈 Полная статистика", callback_data="admin_report_full"),
             ],
-            [InlineKeyboardButton(text="📊 Отчёт за сегодня", callback_data="admin_report_today")],
-            [InlineKeyboardButton(text="📈 Полный отчёт + не оплатили", callback_data="admin_report_full")],
+            [InlineKeyboardButton(text="⚠️ Не оплатили (горячие заявки)", callback_data="admin_pending")],
+            # ── Сканы для Юлии ───────────────────────────────────────
+            [
+                InlineKeyboardButton(text="🔮 Личный разбор", callback_data="admin_scan:personal"),
+                InlineKeyboardButton(text="💼 Бизнес-разбор", callback_data="admin_scan:business"),
+            ],
             [InlineKeyboardButton(text="👁 Мини-скан — 590 ₽", callback_data="scan_type:mini")],
-            [InlineKeyboardButton(text="👥 Все пользователи", callback_data="admin_users")],
-            [InlineKeyboardButton(text="🔑 API ключи — статус/переключение", callback_data="api_status")],
+            # ── Управление ───────────────────────────────────────────
+            [
+                InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users"),
+                InlineKeyboardButton(text="🔑 API ключи", callback_data="api_status"),
+            ],
+            [InlineKeyboardButton(text="🔄 Обновить панель", callback_data="admin_refresh")],
         ]
     )
 
@@ -46,7 +126,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
                 [InlineKeyboardButton(text="🗄 Мой кабинет", callback_data="my_cabinet")],
                 [InlineKeyboardButton(text="👁 Мини-скан — 590 ₽", callback_data="scan_type:mini")],
                 [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
-                [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
+                [InlineKeyboardButton(text="📺 Канал Eye Scan", url="https://t.me/Reva_mentor")],
                 [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
                 [InlineKeyboardButton(text="🆘 Помощь / сообщить об ошибке", callback_data="help_request")],
                 [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
@@ -60,7 +140,7 @@ def _main_keyboard(has_subscription: bool = False) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="💳 Оплатить — Бизнес-разбор — 10 000 ₽", callback_data="buy:business")],
             [InlineKeyboardButton(text="🗄 Мой кабинет 🔒", callback_data="my_cabinet")],
             [InlineKeyboardButton(text="🔷 О методе и создателе", callback_data="about_method")],
-            [InlineKeyboardButton(text="📺 Подписаться на канал", url="https://t.me/Reva_mentor")],
+            [InlineKeyboardButton(text="📺 Канал Eye Scan", url="https://t.me/Reva_mentor")],
             [InlineKeyboardButton(text="💬 Личная консультация с Юлией", url="https://t.me/Reva_Yulya6")],
             [InlineKeyboardButton(text="🆘 Помощь / сообщить об ошибке", callback_data="help_request")],
             [InlineKeyboardButton(text="🔄 Перезапустить бота", callback_data="restart_bot")],
@@ -120,7 +200,7 @@ _ABOUT_METHOD_TEXT = """🔍 <b>Цифровой структурный анал
 
 ━━━━━━━━━━━━━━━━━━━━
 
-→ <a href="https://t.me/Reva_mentor">Канал @Reva_mentor</a>
+→ <a href="https://t.me/Reva_mentor">Канал Eye Scan</a> (@Reva_mentor)
 → <a href="https://t.me/Reva_Yulya6">Личная консультация — по записи</a>"""
 
 
@@ -262,10 +342,9 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext) 
     # Админ видит свою панель ВСЕГДА — первым делом
     is_admin = bool(settings.admin_telegram_id and message.from_user.id == settings.admin_telegram_id)
     if is_admin:
-        name = message.from_user.first_name or "Юлия"
         await state.clear()
         await message.answer(
-            f"👁 <b>Глаз Бога — панель Юлии</b>\n\nДобро пожаловать, {name}.",
+            await _admin_dashboard_text(session),
             parse_mode="HTML",
             reply_markup=_admin_keyboard(),
         )
@@ -373,6 +452,67 @@ async def handle_back_to_menu(callback: CallbackQuery, state: FSMContext) -> Non
         "👁 Выберите формат:",
         reply_markup=_main_keyboard(),
     )
+
+
+@router.callback_query(lambda c: c.data == "admin_refresh")
+async def handle_admin_refresh(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Обновить дашборд — живые цифры прямо в том же сообщении."""
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer("Обновлено")
+    await callback.message.answer(
+        await _admin_dashboard_text(session),
+        parse_mode="HTML",
+        reply_markup=_admin_keyboard(),
+    )
+
+
+@router.callback_query(lambda c: c.data == "admin_pending")
+async def handle_admin_pending(
+    callback: CallbackQuery, session: AsyncSession
+) -> None:
+    """Показать только тех, кто не оплатил — горячие заявки."""
+    if not (settings.admin_telegram_id and callback.from_user.id == settings.admin_telegram_id):
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+    await callback.answer()
+
+    from app.models.payment import Payment
+
+    pending_rows = (await session.execute(
+        select(Payment, User)
+        .join(User, Payment.user_id == User.id)
+        .where(Payment.status == "pending")
+        .order_by(Payment.created_at.desc())
+    )).all()
+
+    if not pending_rows:
+        await callback.message.answer(
+            "✅ <b>Горячих заявок нет.</b>\nВсе кто начал оплату — либо оплатили, либо ушли.",
+            parse_mode="HTML",
+            reply_markup=_admin_keyboard(),
+        )
+        return
+
+    lines = [f"⚠️ <b>Не оплатили — {len(pending_rows)} чел.</b>\n<i>Нажми /grant чтобы выдать вручную</i>\n"]
+    for pay, usr in pending_rows:
+        uname = f"@{usr.username}" if usr.username else f"id:{usr.telegram_id}"
+        name = usr.full_name or uname
+        product = "Личный 3 500 ₽" if pay.product_type == "personal" else "Бизнес 10 000 ₽"
+        date_str = pay.created_at.strftime("%d.%m  %H:%M") if pay.created_at else "—"
+        lines.append(
+            f"👤 <b>{name}</b> ({uname})\n"
+            f"   {product}  |  {date_str}\n"
+            f"   <code>/grant {usr.telegram_id} {pay.product_type}</code>"
+        )
+
+    full_text = "\n".join(lines)
+    chunks = [full_text[i:i + 4000] for i in range(0, len(full_text), 4000)]
+    for chunk in chunks:
+        await callback.message.answer(chunk, parse_mode="HTML")
 
 
 @router.callback_query(lambda c: c.data == "view_oferta")
