@@ -41,6 +41,14 @@ async def _admin_dashboard_text(session: AsyncSession) -> str:
         select(func.count()).select_from(User).where(User.created_at >= week_ago)
     ) or 0
 
+    mini_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "mini", Scan.created_at >= today)
+    ) or 0
+    mini_total = await session.scalar(
+        select(func.count()).select_from(Scan).where(Scan.scan_type == "mini")
+    ) or 0
+
     scans_today = await session.scalar(
         select(func.count()).select_from(Scan)
         .where(Scan.created_at >= today, Scan.status == ScanStatus.completed.value)
@@ -65,6 +73,16 @@ async def _admin_dashboard_text(session: AsyncSession) -> str:
     ) or 0
     revenue = paid_personal * 3500 + paid_business * 10000
 
+    paid_personal_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "personal", Scan.is_paid.is_(True), Scan.created_at >= today)
+    ) or 0
+    paid_business_today = await session.scalar(
+        select(func.count()).select_from(Scan)
+        .where(Scan.scan_type == "business", Scan.is_paid.is_(True), Scan.created_at >= today)
+    ) or 0
+    revenue_today = paid_personal_today * 3500 + paid_business_today * 10000
+
     pending_count = await session.scalar(
         select(func.count()).select_from(Payment).where(Payment.status == "pending")
     ) or 0
@@ -82,8 +100,10 @@ async def _admin_dashboard_text(session: AsyncSession) -> str:
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"👥 Пользователей: <b>{total_users}</b>\n"
         f"   Новых сегодня: <b>{new_today}</b>  ({new_week_line})\n\n"
-        f"🔍 Сканов завершено сегодня: <b>{scans_today}</b>\n\n"
+        f"🔍 Сканов завершено сегодня: <b>{scans_today}</b>\n"
+        f"   👁 Мини сегодня: <b>{mini_today}</b>  (всего: {mini_total})\n\n"
         f"💰 Оплат сегодня: <b>{paid_today}</b>\n"
+        f"   💵 Доход сегодня: <b>{revenue_today:,} ₽</b>\n"
         f"   За 7 дней: <b>{paid_week}</b>\n"
         f"   Личных: {paid_personal} × 3 500 ₽  |  Бизнес: {paid_business} × 10 000 ₽\n"
         f"   💵 Доход всего: <b>{revenue:,} ₽</b>\n\n"
@@ -423,10 +443,14 @@ async def handle_restart_bot(
         incomplete.status = ScanStatus.failed.value
         await session.commit()
 
+    has_subscription = (
+        user.subscription_until is not None
+        and user.subscription_until > _dt.now(_tz.utc)
+    )
     await callback.message.answer(
         "🔄 Бот перезапущен. Все активные процессы сброшены.\n\n"
         "Выберите действие:",
-        reply_markup=_main_keyboard(),
+        reply_markup=_main_keyboard(has_subscription),
     )
 
 
@@ -446,11 +470,23 @@ async def handle_about_method(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(lambda c: c.data == "back_to_menu")
-async def handle_back_to_menu(callback: CallbackQuery, state: FSMContext) -> None:
+async def handle_back_to_menu(
+    callback: CallbackQuery, state: FSMContext, session: AsyncSession
+) -> None:
     await callback.answer()
+    user_service = UserService(session)
+    user, _ = await user_service.get_or_create(
+        telegram_id=callback.from_user.id,
+        username=callback.from_user.username,
+        full_name=callback.from_user.full_name,
+    )
+    has_subscription = (
+        user.subscription_until is not None
+        and user.subscription_until > _dt.now(_tz.utc)
+    )
     await callback.message.answer(
         "👁 Выберите формат:",
-        reply_markup=_main_keyboard(),
+        reply_markup=_main_keyboard(has_subscription),
     )
 
 
