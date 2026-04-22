@@ -54,7 +54,7 @@ AI-система, которая сканирует бизнес клиента
 - **Telegram Bot:** Python (aiogram) или Node.js (telegraf)
 - **AI:** Claude API (Anthropic) — анализ и генерация разборов
 - **База данных:** PostgreSQL — история клиентов и сканирований
-- **Оплата:** ЮKassa или Telegram Stars
+- **Оплата:** ЮKassa (основной и единственный рабочий канал v1)
 - **Веб:** Next.js — личный кабинет клиента
 - **Автопостинг:** n8n или python-telegram-bot
 

@@ -14,7 +14,7 @@ Reva Scanner is built in eight phases that follow a strict dependency chain: inf
 - [x] **Phase 2: Mini-Scan Flow** - Free 5-question FSM, AI teaser generation, birth date capture (completed 2026-03-20)
 - [ ] **Phase 3: Full Scan Questionnaire** - 12-15 question FSM, social URL input, upgrade CTA from mini-scan
 - [x] **Phase 4: AI Engine and Report Delivery** - Full 6-block Claude report, numerology layer, Telegram delivery (completed 2026-03-20)
-- [x] **Phase 5: Payment Gate** - Telegram Stars payment, state machine, scan unlock after confirmation (completed 2026-03-20)
+- [x] **Phase 5: Payment Gate** - ЮKassa payment, state machine, scan unlock after confirmation (completed 2026-03-20; updated to YooKassa-only flow on 2026-04-22)
 - [ ] **Phase 6: Admin Panel** - Client list command, manual message dispatch, basic operations
 - [ ] **Phase 7: Content Generation** - Post drafts, Reels scripts, monthly content plan via Claude
 - [ ] **Phase 8: Content Scheduler** - APScheduler, auto-posting to @Reva_mentor, admin trigger command
@@ -85,11 +85,11 @@ Plans:
 - [ ] 04-02-PLAN.md — Report delivery in full_scan handler: generate_and_deliver_report(), 8 split messages, error handling, human checkpoint
 
 ### Phase 5: Payment Gate
-**Goal**: Users must pay via Telegram Stars before the full scan runs, the payment state machine is race-condition-safe, and every transaction is logged.
+**Goal**: Users must pay via ЮKassa before the full scan runs, the payment state machine is race-condition-safe, and every transaction is logged.
 **Depends on**: Phase 4
 **Requirements**: PAY-01, PAY-02, PAY-03, PAY-04
 **Success Criteria** (what must be TRUE):
-  1. User is presented with a Telegram Stars payment invoice (3500 RUB equivalent) when they attempt to start a full scan.
+  1. User is presented with a ЮKassa payment link/invoice (RUB amount by product type) when they attempt to start a full scan.
   2. Full scan does not start until payment webhook confirms success — no exploit window exists where payment is bypassed.
   3. User sees a "ждем подтверждения..." message after paying and receives the full report automatically within 60 seconds of confirmation.
   4. Every transaction is logged in the database with telegram_id, amount, status, and timestamp.

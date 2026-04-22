@@ -6,14 +6,14 @@ score: 13/13 must-haves verified
 re_verification: false
 gaps: []
 human_verification:
-  - test: "End-to-end Telegram Stars invoice flow"
-    expected: "Tapping buy:personal sends a live Stars invoice in Telegram; pre_checkout query is answered within 10 seconds; after payment the questionnaire starts automatically"
-    why_human: "Requires a live Telegram bot token and a real Stars payment — cannot simulate Telegram network calls programmatically"
+  - test: "End-to-end ЮKassa payment link flow"
+    expected: "Tapping buy:personal sends a ЮKassa payment link; after successful payment.succeeded webhook user gets the start button and questionnaire starts"
+    why_human: "Requires live ЮKassa checkout and webhook delivery from external network"
 ---
 
 # Phase 5: Payment Gate Verification Report
 
-**Phase Goal:** Users must pay via Telegram Stars before the full scan runs, the payment state machine is race-condition-safe, and every transaction is logged.
+**Phase Goal:** Users must pay via ЮKassa before the full scan runs, the payment state machine is race-condition-safe, and every transaction is logged.
 **Verified:** 2026-03-21
 **Status:** PASSED
 **Re-verification:** No — initial verification

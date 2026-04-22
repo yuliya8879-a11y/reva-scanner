@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-19)
 
 **Core value:** AI business diagnostic in 15 minutes — specific, actionable, as good as a personal consultation with Yulia Reva, available 24/7 via Telegram for 3500 RUB.
-**Current focus:** Phase 05 — Payment Gate
+**Current focus:** Phase 06 — Admin & quality hardening
 
 ## Current Position
 
-Phase: 05 (Payment Gate) — EXECUTING
-Plan: 2 of 3
+Phase: 05 (Payment Gate) — COMPLETED
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -58,7 +58,7 @@ Plan: 2 of 3
 
 ### Decisions
 
-- Pre-code: Telegram Stars confirmed as primary payment provider for v1 (no ИП required, no onboarding delay). ЮKassa deferred until legal entity confirmed.
+- Payment architecture updated: production flow switched to ЮKassa-only; Telegram Stars flow removed from bot handlers.
 - Pre-code: Claude Sonnet for full scan, Claude Haiku for mini-scan and content generation.
 - Pre-code: Single Railway service — aiogram bot + FastAPI webhook in one process. No separate polling worker.
 - Pre-code: aiogram FSM with in-memory storage for MVP (Redis deferred to post-PMF).
@@ -78,8 +78,8 @@ Plan: 2 of 3
 - [Phase 05-payment-gate]: get_pending_payment uses JOIN Payment+Scan on scan_type so bot handlers never need to fetch Scan separately
 - [Phase 05-payment-gate P02]: Deferred import of start_questionnaire_after_payment inside handle_successful_payment body to avoid circular import at module load time
 - [Phase 05-payment-gate P02]: payment router registered before full_scan router — buy:* callbacks intercepted by payment.py, not full_scan.py
-- [Phase 05-payment-gate P02]: handle_buy_callback removed from full_scan.py; questionnaire only starts after Stars payment confirmed via handle_successful_payment
-- [Phase 05-payment-gate]: Mock patch target for deferred import is resolved at full_scan module namespace — patch app.bot.handlers.full_scan.start_questionnaire_after_payment (not payment.py)
+- [Phase 05-payment-gate]: handle_buy_callback centralized in payment.py; questionnaire launches only after confirmed payment webhook/state update
+- [Phase 05-payment-gate]: `/webhook/yookassa` confirms payment, grants subscription window, and sends resume/start callback to user
 
 ### Pending Todos
 
@@ -89,10 +89,10 @@ None yet.
 
 - [Pre-code] Claude model names must be verified at docs.anthropic.com before writing any `anthropic.messages.create()` calls — IDs rename periodically.
 - [Pre-code] Yulia must review first 20-30 scan outputs manually before autonomous public launch — build this into Phase 4 completion criteria.
-- [Pre-code] Telegram Stars withdrawal mechanics (XTR to RUB convertibility) must be confirmed before Phase 5 starts — determines revenue viability of Stars-only launch.
+- [Operational] Validate ЮKassa webhook authenticity and replay handling in production logs.
 
 ## Session Continuity
 
 Last session: 2026-03-20T22:15:56.851Z
-Stopped at: Completed 05-03 Payment flow test suite — tests/test_payment_flow.py 8 tests passing
+Stopped at: Payment flow migrated to ЮKassa-only and synced with bot/webhook handlers
 Resume file: None
