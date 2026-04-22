@@ -24,6 +24,13 @@ BLOCK_KEYS = [
     "рекомендации",
 ]
 
+QUALITY_CHECKLIST = [
+    "specificity",
+    "personalization",
+    "actionability",
+    "safety",
+]
+
 _PERSONAL_SYSTEM_PROMPT = """Ты — AI-сканер «Глаз Бога», созданный Юлией Ревой.
 Проводишь ПОЛНОЕ личное сканирование по авторскому алгоритму.
 

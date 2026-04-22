@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     yookassa_shop_id: str = ""
     yookassa_secret_key: str = ""
     yookassa_test_mode: bool = True
+    yookassa_webhook_secret: str = ""
 
     @property
     def database_url_async(self) -> str:

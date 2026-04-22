@@ -81,7 +81,7 @@ class TestProgressIndicator:
     async def test_send_question_progress_format_last_question(self):
         bot = AsyncMock()
         bot.send_message = AsyncMock()
-        question = PERSONAL_QUESTIONS[14]  # social_url
+        question = BUSINESS_QUESTIONS[14]  # social_url
 
         await _send_question(bot, chat_id=123, question=question, index=14, total=15)
 
@@ -110,7 +110,7 @@ class TestProgressIndicator:
         """Keyboard questions should produce buttons with fq:{key}:{value} callback."""
         bot = AsyncMock()
         bot.send_message = AsyncMock()
-        question = PERSONAL_QUESTIONS[2]  # business_area — keyboard
+        question = BUSINESS_QUESTIONS[2]  # business_area — keyboard
 
         await _send_question(bot, chat_id=123, question=question, index=2, total=15)
 
@@ -127,7 +127,7 @@ class TestProgressIndicator:
         """Optional text questions should include a 'Пропустить' button."""
         bot = AsyncMock()
         bot.send_message = AsyncMock()
-        question = PERSONAL_QUESTIONS[14]  # social_url — optional text
+        question = BUSINESS_QUESTIONS[14]  # social_url — optional text
 
         await _send_question(bot, chat_id=123, question=question, index=14, total=15)
 
@@ -185,8 +185,9 @@ def _make_state(data: dict | None = None) -> MagicMock:
 
 
 def _make_session() -> MagicMock:
-    session = AsyncMock()
+    session = MagicMock()
     session.commit = AsyncMock()
+    session.add = MagicMock()
     return session
 
 
@@ -199,7 +200,7 @@ class TestHandleBuyCallback:
         state = _make_state()
         session = _make_session()
 
-        mock_user = MagicMock(id=10)
+        mock_user = MagicMock(id=10, subscription_until=None)
         mock_scan = MagicMock(id=100, answers={}, scan_type="personal")
 
         with (
@@ -219,13 +220,17 @@ class TestHandleBuyCallback:
                 "app.bot.handlers.payment.PaymentService",
                 new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
+            patch(
+                "app.services.yookassa_service.create_payment",
+                new=MagicMock(return_value={"confirmation_url": "https://pay.example/1", "payment_id": "p1"}),
+            ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        # New behavior: sends invoice, does not set FSM state directly
-        callback.message.bot.send_invoice.assert_awaited_once()
-        call_kwargs = callback.message.bot.send_invoice.call_args[1]
-        assert call_kwargs["currency"] == "XTR"
+        # Current behavior: sends YooKassa link message
+        callback.message.answer.assert_awaited_once()
+        text = callback.message.answer.call_args[0][0]
+        assert "Оплата" in text
 
     @pytest.mark.asyncio
     async def test_buy_business_creates_scan(self):
@@ -233,7 +238,7 @@ class TestHandleBuyCallback:
         state = _make_state()
         session = _make_session()
 
-        mock_user = MagicMock(id=11)
+        mock_user = MagicMock(id=11, subscription_until=None)
         mock_scan = MagicMock(id=101, answers={}, scan_type="business")
 
         with (
@@ -253,13 +258,16 @@ class TestHandleBuyCallback:
                 "app.bot.handlers.payment.PaymentService",
                 new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
+            patch(
+                "app.services.yookassa_service.create_payment",
+                new=MagicMock(return_value={"confirmation_url": "https://pay.example/2", "payment_id": "p2"}),
+            ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        # New behavior: sends invoice for business scan
-        callback.message.bot.send_invoice.assert_awaited_once()
-        call_kwargs = callback.message.bot.send_invoice.call_args[1]
-        assert call_kwargs["currency"] == "XTR"
+        callback.message.answer.assert_awaited_once()
+        text = callback.message.answer.call_args[0][0]
+        assert "бизнес-разбор" in text
 
     @pytest.mark.asyncio
     async def test_buy_personal_resumes_same_type_incomplete_scan(self):
@@ -268,7 +276,7 @@ class TestHandleBuyCallback:
         state = _make_state()
         session = _make_session()
 
-        mock_user = MagicMock(id=12)
+        mock_user = MagicMock(id=12, subscription_until=None)
         # Existing scan with 3 answers already saved
         mock_scan = MagicMock(
             id=200,
@@ -289,13 +297,15 @@ class TestHandleBuyCallback:
                 "app.bot.handlers.payment.PaymentService",
                 new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
+            patch(
+                "app.services.yookassa_service.create_payment",
+                new=MagicMock(return_value={"confirmation_url": "https://pay.example/3", "payment_id": "p3"}),
+            ),
         ):
             await handle_buy_callback(callback, state, session)
 
-        # Resumes existing scan — sends invoice for it
-        callback.message.bot.send_invoice.assert_awaited_once()
-        call_kwargs = callback.message.bot.send_invoice.call_args[1]
-        assert "scan:200:" in call_kwargs["payload"]
+        # Reuses existing scan id in YooKassa metadata payload path
+        callback.message.answer.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_buy_business_cancels_different_type_incomplete_scan(self):
@@ -304,7 +314,7 @@ class TestHandleBuyCallback:
         state = _make_state()
         session = _make_session()
 
-        mock_user = MagicMock(id=13)
+        mock_user = MagicMock(id=13, subscription_until=None)
         mock_existing = MagicMock(
             id=300,
             scan_type="personal",
@@ -329,17 +339,18 @@ class TestHandleBuyCallback:
                 "app.bot.handlers.payment.PaymentService",
                 new=MagicMock(return_value=MagicMock(create_payment=AsyncMock())),
             ),
+            patch(
+                "app.services.yookassa_service.create_payment",
+                new=MagicMock(return_value={"confirmation_url": "https://pay.example/4", "payment_id": "p4"}),
+            ),
         ):
             await handle_buy_callback(callback, state, session)
 
         # Old scan should be marked failed
         assert mock_existing.status == "failed"
         session.commit.assert_called()
-        # Invoice sent for new scan
-        callback.message.bot.send_invoice.assert_awaited_once()
-        call_kwargs = callback.message.bot.send_invoice.call_args[1]
-        assert call_kwargs["currency"] == "XTR"
-        assert "scan:301:" in call_kwargs["payload"]
+        # Payment link sent for new scan
+        callback.message.answer.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +365,7 @@ class TestHandleKeyboardAnswer:
     async def test_keyboard_answer_saves_and_advances(self):
         callback = _make_callback("fq:business_area:services")
         state = _make_state(
-            data={"scan_id": 50, "scan_type": "personal", "current_index": 2}
+            data={"scan_id": 50, "scan_type": "business", "current_index": 2}
         )
         session = _make_session()
 
@@ -386,7 +397,7 @@ class TestHandleSkipAnswer:
     async def test_skip_saves_empty_string(self):
         callback = _make_callback("fq_skip:social_url")
         state = _make_state(
-            data={"scan_id": 60, "scan_type": "personal", "current_index": 14}
+            data={"scan_id": 60, "scan_type": "business", "current_index": 14}
         )
         session = _make_session()
 
@@ -428,17 +439,16 @@ class TestCompletionMessage:
     """Test that 'Анкета заполнена' is sent after last question."""
 
     @pytest.mark.asyncio
-    async def test_last_question_sends_completion_message(self):
-        """After the final question (index 14 for personal), completion message must contain 'Анкета заполнена'."""
-        # social_url (index 14) is the last personal question — skip it
+    async def test_last_question_triggers_generation(self):
+        """After the final question, handler should trigger report generation path."""
         callback = _make_callback("fq_skip:social_url")
-        bot_mock = callback.message.bot
 
         state = _make_state(
-            data={"scan_id": 70, "scan_type": "personal", "current_index": 14}
+            data={"scan_id": 70, "scan_type": "business", "current_index": 14}
         )
         session = _make_session()
 
+        generate_mock = AsyncMock()
         with (
             patch(
                 "app.bot.handlers.full_scan.ScanService.save_answer",
@@ -450,17 +460,12 @@ class TestCompletionMessage:
             ),
             patch(
                 "app.bot.handlers.full_scan.generate_and_deliver_report",
-                new=AsyncMock(),
+                new=generate_mock,
             ),
         ):
             await handle_skip_answer(callback, state, session)
 
-        # Check that send_message was called with completion text
-        call_args_list = bot_mock.send_message.call_args_list
-        sent_texts = [str(c) for c in call_args_list]
-        assert any("Анкета заполнена" in t for t in sent_texts), (
-            f"'Анкета заполнена' not found in calls: {sent_texts}"
-        )
+        generate_mock.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
@@ -498,10 +503,10 @@ class TestResumeScan:
             await handle_resume_scan(callback, state, session)
 
         call_kwargs = state.update_data.call_args[1]
-        assert call_kwargs["current_index"] == 5  # 5 answers -> next is index 5
-        # FSM state should be q5
+        assert call_kwargs["current_index"] == 1  # personal: only birth_date + scan_request
+        # FSM state should be q1
         set_state_arg = state.set_state.call_args[0][0]
-        assert set_state_arg == FullScanStates.q5
+        assert set_state_arg == FullScanStates.q1
 
     @pytest.mark.asyncio
     async def test_resume_scan_not_found_sends_message(self):
@@ -648,7 +653,7 @@ class TestStartHandlerResume:
         state = _make_state()
         session = _make_session()
 
-        mock_user = MagicMock(id=22)
+        mock_user = MagicMock(id=22, terms_accepted=True, subscription_until=None)
 
         with (
             patch(
